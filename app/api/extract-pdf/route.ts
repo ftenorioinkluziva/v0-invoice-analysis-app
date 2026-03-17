@@ -13,10 +13,10 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
     const base64 = buffer.toString('base64')
-    const mimeType = file.type || 'application/pdf'
+    const mediaType = file.type || 'application/pdf'
 
     const result = await generateText({
-      model: 'openai/gpt-4o',
+      model: 'anthropic/claude-sonnet-4.6',
       messages: [
         {
           role: 'user',
@@ -40,7 +40,8 @@ Todos os valores monetários devem estar em BRL (reais).`,
             {
               type: 'file',
               data: base64,
-              mimeType,
+              mediaType,
+              filename: file.name || 'invoice.pdf',
             },
           ],
         },
