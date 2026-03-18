@@ -47,6 +47,7 @@ export type ProductPriceHistory = {
     date: string
     price: number
     store_name: string
+    raw_description: string
   }[]
   stats: {
     avg_price: number

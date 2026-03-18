@@ -27,8 +27,10 @@ export function SpendingChart({ data, isLoading }: SpendingChartProps) {
   }
 
   const formatMonth = (month: string) => {
-    const date = new Date(month + '-01')
-    return date.toLocaleDateString('pt-BR', { month: 'short' })
+    const [year, m] = month.split('-')
+    const date = new Date(Number(year), Number(m) - 1)
+    const label = date.toLocaleDateString('pt-BR', { month: 'short' })
+    return data && data.length > 6 ? `${label}/${year.slice(2)}` : label
   }
 
   if (isLoading) {

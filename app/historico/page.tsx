@@ -245,15 +245,18 @@ export default function HistoricoPage() {
               {productHistory.prices.slice(0, 10).map((price, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between rounded-lg bg-secondary/30 p-2.5"
+                  className="flex items-center justify-between gap-3 rounded-lg bg-secondary/30 p-2.5"
                 >
-                  <div>
-                    <p className="text-sm font-medium">{price.store_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(price.date)}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{price.raw_description}</p>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Store className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{price.store_name}</span>
+                      <span>·</span>
+                      <span className="shrink-0">{formatDate(price.date)}</span>
+                    </div>
                   </div>
-                  <span className="font-mono text-sm font-semibold">
+                  <span className="shrink-0 font-mono text-sm font-semibold">
                     {formatCurrency(price.price)}
                   </span>
                 </div>

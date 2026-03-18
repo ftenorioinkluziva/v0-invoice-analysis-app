@@ -19,8 +19,9 @@ export async function GET(
 
     // Get price history
     const priceHistory = await sql`
-      SELECT 
+      SELECT
         ii.unit_price as price,
+        ii.raw_description,
         i.purchase_date as date,
         s.name as store_name
       FROM invoice_items ii
@@ -77,6 +78,7 @@ export async function GET(
         date: row.date,
         price: Number(row.price),
         store_name: row.store_name,
+        raw_description: row.raw_description,
       })),
       stats: {
         avg_price: Number(stats[0].avg_price) || 0,

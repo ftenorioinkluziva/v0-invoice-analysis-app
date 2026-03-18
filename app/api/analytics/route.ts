@@ -36,13 +36,11 @@ export async function GET() {
         (SELECT COUNT(*) FROM products) as product_count
     `
 
-    // Spending by month (last 6 months)
     const spendingByMonth = await sql`
-      SELECT 
+      SELECT
         TO_CHAR(purchase_date, 'YYYY-MM') as month,
         SUM(total_amount) as total
       FROM invoices
-      WHERE purchase_date >= NOW() - INTERVAL '6 months'
       GROUP BY TO_CHAR(purchase_date, 'YYYY-MM')
       ORDER BY month ASC
     `
