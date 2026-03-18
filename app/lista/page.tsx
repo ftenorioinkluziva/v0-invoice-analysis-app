@@ -61,11 +61,18 @@ type Suggestion = {
   days_since_purchase: number
 }
 
+type CustomItem = {
+  id: string
+  name: string
+  checked: boolean
+}
+
 export default function ListaPage() {
   const [selectedListId, setSelectedListId] = useState<number | null>(null)
   const [newListName, setNewListName] = useState('')
   const [showNewListDialog, setShowNewListDialog] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [customItems, setCustomItems] = useState<CustomItem[]>([])
 
   const { data: listsData, mutate: mutateLists } = useSWR<{ lists: ShoppingList[] }>(
     '/api/shopping-lists',
@@ -138,6 +145,26 @@ export default function ListaPage() {
       body: JSON.stringify({ item_id: itemId }),
     })
     mutateDetails()
+  }
+
+  const handleAddCustomItem = (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setCustomItems((prev) => [
+      ...prev,
+      { id: `custom-${Date.now()}`, name: trimmed, checked: false },
+    ])
+    setSearchQuery('')
+  }
+
+  const handleToggleCustomItem = (id: string, checked: boolean) => {
+    setCustomItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, checked } : item))
+    )
+  }
+
+  const handleDeleteCustomItem = (id: string) => {
+    setCustomItems((prev) => prev.filter((item) => item.id !== id))
   }
 
   // Group items by category
@@ -243,7 +270,7 @@ export default function ListaPage() {
     <div className="flex flex-col gap-4 p-4">
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setSelectedListId(null)}>
+          <Button variant="ghost" size="icon" onClick={() => { setSelectedListId(null); setCustomItems([]) }}>
             <ChevronRight className="h-5 w-5 rotate-180" />
           </Button>
           <div>
@@ -260,16 +287,21 @@ export default function ListaPage() {
       {/* Search and add products */}
       <div className="relative">
         <Input
-          placeholder="Buscar produto para adicionar..."
+          placeholder="Buscar ou digitar item avulso..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter' || !searchQuery.trim()) return
+            const hasProducts = productsData?.products && productsData.products.length > 0
+            if (!hasProducts) handleAddCustomItem(searchQuery)
+          }}
           className="bg-secondary/50"
         />
-        {searchQuery && productsData?.products && productsData.products.length > 0 && (
+        {searchQuery && (
           <Card className="absolute left-0 right-0 top-full z-10 mt-1 bg-card">
             <ScrollArea className="max-h-48">
               <div className="p-2">
-                {productsData.products.slice(0, 5).map((product) => (
+                {productsData?.products?.slice(0, 5).map((product) => (
                   <button
                     key={product.id}
                     className="flex w-full items-center justify-between rounded-lg p-2 text-left transition-colors hover:bg-secondary/50"
@@ -282,6 +314,16 @@ export default function ListaPage() {
                     <Plus className="h-4 w-4 text-primary" />
                   </button>
                 ))}
+                <button
+                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border p-2 text-left transition-colors hover:bg-secondary/50"
+                  onClick={() => handleAddCustomItem(searchQuery)}
+                >
+                  <Plus className="h-4 w-4 text-primary" />
+                  <div>
+                    <p className="text-sm font-medium">Adicionar &quot;{searchQuery.trim()}&quot;</p>
+                    <p className="text-xs text-muted-foreground">Item avulso (sem histórico)</p>
+                  </div>
+                </button>
               </div>
             </ScrollArea>
           </Card>
@@ -402,8 +444,46 @@ export default function ListaPage() {
         </Card>
       )}
 
+      {/* Custom items */}
+      {customItems.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-sm font-medium text-muted-foreground">Itens Avulsos</h3>
+          <div className="space-y-2">
+            {customItems.map((item) => (
+              <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-60')}>
+                <CardContent className="flex items-center gap-3 p-3">
+                  <Checkbox
+                    checked={item.checked}
+                    onCheckedChange={(checked) =>
+                      handleToggleCustomItem(item.id, checked as boolean)
+                    }
+                    className="h-5 w-5"
+                  />
+                  <p
+                    className={cn(
+                      'flex-1 text-sm font-medium',
+                      item.checked && 'line-through'
+                    )}
+                  >
+                    {item.name}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDeleteCustomItem(item.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Finish shopping button */}
-      {listDetails?.items && listDetails.items.length > 0 && (
+      {(listDetails?.items?.length || customItems.length > 0) && (
         <Button className="mt-2" size="lg">
           <Check className="mr-2 h-4 w-4" />
           Finalizar Compras
