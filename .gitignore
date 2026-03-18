@@ -9,6 +9,7 @@ __v0_jsx-dev-runtime.ts
 next.user-config.*
 
 # Environment variables
+.env
 .env*.local
 
 # Common ignores
@@ -16,3 +17,9 @@ node_modules/
 .next/
 .DS_Store
 .vercel
+
+# Claude Code
+.claude/
+
+# Tesseract OCR data
+*.traineddata

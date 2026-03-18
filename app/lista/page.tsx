@@ -294,20 +294,20 @@ export default function ListaPage() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
               <Sparkles className="h-4 w-4 text-primary" />
-              Sugestoes de Recompra
+              Sugestões de Recompra
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex flex-wrap gap-2">
               {listDetails.suggestions.map((suggestion) => (
                 <button
                   key={suggestion.product_id}
-                  className="flex shrink-0 items-center gap-2 rounded-full border border-border bg-secondary/30 px-3 py-1.5 text-sm transition-colors hover:bg-secondary"
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/30 px-3 py-1.5 text-sm transition-colors hover:bg-secondary"
                   onClick={() => handleAddItem(suggestion.product_id)}
                 >
                   <Plus className="h-3 w-3 text-primary" />
-                  <span className="capitalize">{suggestion.normalized_name}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="capitalize truncate max-w-40">{suggestion.normalized_name}</span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
                     {suggestion.days_since_purchase}d
                   </span>
                 </button>

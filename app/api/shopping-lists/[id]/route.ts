@@ -63,9 +63,9 @@ export async function GET(
       )
       GROUP BY p.id, p.normalized_name, p.category
       HAVING COUNT(ii.id) >= 2
-      ORDER BY 
-        EXTRACT(DAY FROM NOW() - MAX(i.purchase_date)) DESC,
-        COUNT(ii.id) DESC
+      ORDER BY
+        COUNT(ii.id) DESC,
+        EXTRACT(DAY FROM NOW() - MAX(i.purchase_date)) DESC
       LIMIT 5
     `
 
