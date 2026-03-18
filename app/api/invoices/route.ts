@@ -31,25 +31,47 @@ export async function POST(request: Request) {
     const body = await request.json() as { data: ExtractedInvoice; filename: string }
     const { data, filename } = body
 
-    // Find or create store
-    let storeResult = await sql`
-      SELECT id FROM stores WHERE name = ${data.store_name} LIMIT 1
-    `
-
+    // Upsert store — match by CNPJ when available, fallback to name
     let storeId: number
 
-    if (storeResult.length === 0) {
-      const newStore = await sql`
+    if (data.store_cnpj) {
+      const result = await sql`
         INSERT INTO stores (name, cnpj, address)
         VALUES (${data.store_name}, ${data.store_cnpj}, ${data.store_address})
+        ON CONFLICT (cnpj) DO UPDATE SET name = EXCLUDED.name
         RETURNING id
       `
-      storeId = newStore[0].id
+      storeId = result[0].id
     } else {
-      storeId = storeResult[0].id
+      const existing = await sql`
+        SELECT id FROM stores WHERE name = ${data.store_name} LIMIT 1
+      `
+      if (existing.length > 0) {
+        storeId = existing[0].id
+      } else {
+        const result = await sql`
+          INSERT INTO stores (name, cnpj, address)
+          VALUES (${data.store_name}, NULL, ${data.store_address})
+          RETURNING id
+        `
+        storeId = result[0].id
+      }
     }
 
-    // Create invoice
+    // Check for duplicate invoice
+    const duplicate = await sql`
+      SELECT id FROM invoices
+      WHERE (invoice_number IS NOT NULL AND invoice_number = ${data.invoice_number})
+        OR (store_id = ${storeId} AND purchase_date = ${data.purchase_date} AND total_amount = ${data.total_amount})
+      LIMIT 1
+    `
+    if (duplicate.length > 0) {
+      return Response.json(
+        { error: 'Nota fiscal já importada', duplicateInvoiceId: duplicate[0].id },
+        { status: 409 }
+      )
+    }
+
     const invoiceResult = await sql`
       INSERT INTO invoices (store_id, invoice_number, purchase_date, total_amount, pdf_filename)
       VALUES (${storeId}, ${data.invoice_number}, ${data.purchase_date}, ${data.total_amount}, ${filename})
@@ -59,9 +81,9 @@ export async function POST(request: Request) {
 
     // Process items
     for (const item of data.items) {
-      // Find or create product
-      const normalizedName = normalizeProductName(item.description)
-      const category = categorizeProduct(item.description)
+      const validated = validateItemPrices(item)
+      const normalizedName = normalizeProductName(validated.description)
+      const category = categorizeProduct(validated.description)
 
       let productResult = await sql`
         SELECT id FROM products WHERE normalized_name = ${normalizedName} LIMIT 1
@@ -72,7 +94,7 @@ export async function POST(request: Request) {
       if (productResult.length === 0) {
         const newProduct = await sql`
           INSERT INTO products (normalized_name, category, unit)
-          VALUES (${normalizedName}, ${category}, ${extractUnit(item.description)})
+          VALUES (${normalizedName}, ${category}, ${extractUnit(validated.description)})
           RETURNING id
         `
         productId = newProduct[0].id
@@ -80,10 +102,9 @@ export async function POST(request: Request) {
         productId = productResult[0].id
       }
 
-      // Create invoice item
       await sql`
         INSERT INTO invoice_items (invoice_id, product_id, raw_description, quantity, unit_price, total_price)
-        VALUES (${invoiceId}, ${productId}, ${item.description}, ${item.quantity}, ${item.unit_price}, ${item.total_price})
+        VALUES (${invoiceId}, ${productId}, ${validated.description}, ${validated.quantity}, ${validated.unit_price}, ${validated.total_price})
       `
     }
 
@@ -101,15 +122,45 @@ export async function POST(request: Request) {
   }
 }
 
+type ItemInput = { description: string; quantity: number; unit_price: number; total_price: number }
+
+function validateItemPrices(item: ItemInput): ItemInput {
+  const { quantity, unit_price, total_price } = item
+  if (quantity <= 0 || total_price <= 0) return item
+
+  const calculatedUnit = total_price / quantity
+  const tolerance = Math.max(total_price * 0.05, 0.10)
+
+  // If unit_price × quantity is close to total_price, data is consistent
+  if (Math.abs(unit_price * quantity - total_price) <= tolerance) return item
+
+  // Mismatch detected — trust total_price and quantity, recalculate unit_price
+  return { ...item, unit_price: Math.round(calculatedUnit * 100) / 100 }
+}
+
+const STOP_WORDS = new Set(['de', 'da', 'do', 'dos', 'das', 'a', 'o', 'um', 'uma', 'e', 'com', 'para', 'em', 'un', 'und'])
+const UNIT_WORDS = new Set(['kg', 'ml', 'lt', 'g', 'gr', 'pc', 'pct', 'cx'])
+
 function normalizeProductName(description: string): string {
-  return description
-    .toLowerCase()
-    .replace(/\d+\s*(ml|l|g|kg|un|pc|pct|cx|lt)\b/gi, '')
+  const lower = description.toLowerCase()
+
+  // Extract size+unit (e.g. "200gr", "1,03kg", "500ml") — this IS part of the product identity
+  const sizeMatch = lower.match(/(\d+[,.]?\d*)\s*(ml|l|g|gr|kg|pc|pct|cx|lt)\b/)
+  const size = sizeMatch
+    ? sizeMatch[1].replace(',', '.') + sizeMatch[2].replace('gr', 'g')
+    : null
+
+  const name = lower
+    .replace(/\d+[,.]?\d*\s*(ml|l|g|gr|kg|un|pc|pct|cx|lt)\b/gi, '')
+    .replace(/[-–—]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .split(' ')
+    .filter(w => !STOP_WORDS.has(w) && !UNIT_WORDS.has(w) && w.length > 1)
     .slice(0, 4)
     .join(' ')
+
+  return size ? `${name} ${size}` : name
 }
 
 function categorizeProduct(description: string): string {

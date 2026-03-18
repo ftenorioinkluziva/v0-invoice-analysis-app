@@ -95,7 +95,11 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to save invoice')
+        const body = await response.json().catch(() => null)
+        if (response.status === 409) {
+          throw new Error('Esta nota fiscal já foi importada anteriormente.')
+        }
+        throw new Error(body?.error || 'Failed to save invoice')
       }
 
       setStatus('success')
