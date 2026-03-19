@@ -1,4 +1,5 @@
 import { sql } from '@/lib/db'
+import { UpdateAlertSchema } from '@/lib/validations'
 
 export async function GET() {
   try {
@@ -26,8 +27,12 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const { id, read } = await request.json()
-    
+    const parsed = UpdateAlertSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+    }
+    const { id, read } = parsed.data
+
     await sql`
       UPDATE alerts SET read = ${read} WHERE id = ${id}
     `

@@ -1,5 +1,6 @@
 import { sql } from '@/lib/db'
 import { ExtractedInvoice } from '@/lib/types'
+import { SaveInvoiceSchema } from '@/lib/validations'
 
 export async function GET() {
   try {
@@ -28,8 +29,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { data: ExtractedInvoice; filename: string }
-    const { data, filename } = body
+    const parsed = SaveInvoiceSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+    }
+    const { data, filename } = parsed.data
 
     // Upsert store — match by CNPJ when available, fallback to name
     let storeId: number

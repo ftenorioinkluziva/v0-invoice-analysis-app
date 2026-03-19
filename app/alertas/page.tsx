@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ErrorState } from '@/components/error-state'
 import { cn } from '@/lib/utils'
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
@@ -59,7 +60,7 @@ const alertTypeConfig = {
 }
 
 export default function AlertasPage() {
-  const { data, mutate } = useSWR<{ alerts: Alert[] }>('/api/alerts', fetcher)
+  const { data, error, mutate } = useSWR<{ alerts: Alert[] }>('/api/alerts', fetcher)
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -130,7 +131,9 @@ export default function AlertasPage() {
         </div>
       </header>
 
-      {data?.alerts && data.alerts.length > 0 ? (
+      {error ? (
+        <ErrorState message="Erro ao carregar alertas" onRetry={() => mutate()} />
+      ) : data?.alerts && data.alerts.length > 0 ? (
         <div className="space-y-6">
           {grouped.today.length > 0 && (
             <section>

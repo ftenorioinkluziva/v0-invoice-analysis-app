@@ -1,4 +1,5 @@
 import { sql } from '@/lib/db'
+import { AddListItemSchema, UpdateListItemSchema, DeleteListItemSchema } from '@/lib/validations'
 
 export async function GET(
   _request: Request,
@@ -96,7 +97,11 @@ export async function POST(
   try {
     const { id } = await params
     const listId = parseInt(id)
-    const { product_id, quantity = 1 } = await request.json()
+    const parsed = AddListItemSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+    }
+    const { product_id, quantity } = parsed.data
 
     // Get estimated price from last purchase
     const lastPrice = await sql`
@@ -130,7 +135,11 @@ export async function PATCH(
   try {
     const { id } = await params
     const listId = parseInt(id)
-    const { item_id, checked, quantity, status } = await request.json()
+    const parsed = UpdateListItemSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+    }
+    const { item_id, checked, quantity, status } = parsed.data
 
     if (status) {
       // Update list status
@@ -165,7 +174,11 @@ export async function DELETE(
   try {
     const { id } = await params
     const listId = parseInt(id)
-    const { item_id } = await request.json()
+    const parsed = DeleteListItemSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+    }
+    const { item_id } = parsed.data
 
     if (item_id) {
       await sql`DELETE FROM shopping_list_items WHERE id = ${item_id}`

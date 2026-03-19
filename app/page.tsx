@@ -3,6 +3,7 @@
 import useSWR from 'swr'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ErrorState } from '@/components/error-state'
 import { PdfUpload } from '@/components/pdf-upload'
 import { StatsCards } from '@/components/stats-cards'
 import { PriceAlerts } from '@/components/price-alerts'
@@ -16,12 +17,14 @@ export default function HomePage() {
   const {
     data: stats,
     isLoading: statsLoading,
+    error: statsError,
     mutate: mutateStats,
   } = useSWR<DashboardStats>('/api/analytics', fetcher)
 
   const {
     data: invoicesData,
     isLoading: invoicesLoading,
+    error: invoicesError,
     mutate: mutateInvoices,
   } = useSWR<{ invoices: Array<{
     id: number
@@ -61,6 +64,14 @@ export default function HomePage() {
           <span className="sr-only">Atualizar dados</span>
         </Button>
       </header>
+
+      {/* Error state */}
+      {(statsError || invoicesError) && (
+        <ErrorState
+          message="Erro ao carregar dados do dashboard"
+          onRetry={handleRefresh}
+        />
+      )}
 
       {/* Stats */}
       <StatsCards stats={stats ?? null} isLoading={statsLoading} />

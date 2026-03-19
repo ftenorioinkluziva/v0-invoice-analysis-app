@@ -1,4 +1,5 @@
 import { sql } from '@/lib/db'
+import { CreateShoppingListSchema } from '@/lib/validations'
 
 export async function GET() {
   try {
@@ -25,8 +26,12 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { name } = await request.json()
-    
+    const parsed = CreateShoppingListSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+    }
+    const { name } = parsed.data
+
     const result = await sql`
       INSERT INTO shopping_lists (name, status)
       VALUES (${name || 'Nova Lista'}, 'active')

@@ -31,6 +31,7 @@ import {
   YAxis,
 } from 'recharts'
 import { cn } from '@/lib/utils'
+import { ErrorState } from '@/components/error-state'
 import { ProductPriceHistory } from '@/lib/types'
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
@@ -49,7 +50,7 @@ export default function HistoricoPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('')
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
 
-  const { data: productsData } = useSWR<{
+  const { data: productsData, error: productsError, mutate: mutateProducts } = useSWR<{
     products: Product[]
     categories: string[]
   }>(
@@ -306,7 +307,9 @@ export default function HistoricoPage() {
 
       {/* Products list */}
       <ScrollArea className="flex-1">
-        {productsData?.products && productsData.products.length > 0 ? (
+        {productsError ? (
+          <ErrorState message="Erro ao carregar produtos" onRetry={() => mutateProducts()} />
+        ) : productsData?.products && productsData.products.length > 0 ? (
           <div className="space-y-2">
             {productsData.products.map((product) => (
               <Card

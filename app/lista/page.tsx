@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { ErrorState } from '@/components/error-state'
 import { cn } from '@/lib/utils'
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
@@ -74,12 +75,12 @@ export default function ListaPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [customItems, setCustomItems] = useState<CustomItem[]>([])
 
-  const { data: listsData, mutate: mutateLists } = useSWR<{ lists: ShoppingList[] }>(
+  const { data: listsData, error: listsError, mutate: mutateLists } = useSWR<{ lists: ShoppingList[] }>(
     '/api/shopping-lists',
     fetcher
   )
 
-  const { data: listDetails, mutate: mutateDetails } = useSWR<{
+  const { data: listDetails, error: detailsError, mutate: mutateDetails } = useSWR<{
     list: ShoppingList
     items: ListItem[]
     suggestions: Suggestion[]
@@ -219,7 +220,9 @@ export default function ListaPage() {
           </Dialog>
         </header>
 
-        {listsData?.lists && listsData.lists.length > 0 ? (
+        {listsError ? (
+          <ErrorState message="Erro ao carregar listas" onRetry={() => mutateLists()} />
+        ) : listsData?.lists && listsData.lists.length > 0 ? (
           <div className="space-y-2">
             {listsData.lists.map((list) => (
               <Card
@@ -283,6 +286,10 @@ export default function ListaPage() {
           </div>
         </div>
       </header>
+
+      {detailsError && (
+        <ErrorState message="Erro ao carregar lista" onRetry={() => mutateDetails()} />
+      )}
 
       {/* Search and add products */}
       <div className="relative">
