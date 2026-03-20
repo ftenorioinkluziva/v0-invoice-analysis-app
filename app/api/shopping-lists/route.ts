@@ -1,8 +1,14 @@
 import { sql } from '@/lib/db'
 import { CreateShoppingListSchema } from '@/lib/validations'
+import { getSessionUserId } from '@/lib/auth-session'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const lists = await sql`
       SELECT 
         sl.id,
@@ -14,6 +20,7 @@ export async function GET() {
         SUM(COALESCE(sli.estimated_price, 0) * sli.quantity) as estimated_total
       FROM shopping_lists sl
       LEFT JOIN shopping_list_items sli ON sl.id = sli.list_id
+      WHERE sl.user_id = ${userId}
       GROUP BY sl.id, sl.name, sl.status, sl.created_at
       ORDER BY sl.created_at DESC
     `
@@ -26,6 +33,11 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const parsed = CreateShoppingListSchema.safeParse(await request.json())
     if (!parsed.success) {
       return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
@@ -33,8 +45,8 @@ export async function POST(request: Request) {
     const { name } = parsed.data
 
     const result = await sql`
-      INSERT INTO shopping_lists (name, status)
-      VALUES (${name || 'Nova Lista'}, 'active')
+      INSERT INTO shopping_lists (name, status, user_id)
+      VALUES (${name || 'Nova Lista'}, 'active', ${userId})
       RETURNING id, name, status, created_at
     `
     

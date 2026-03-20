@@ -1,16 +1,22 @@
 import { sql } from '@/lib/db'
+import { getSessionUserId } from '@/lib/auth-session'
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getSessionUserId(_request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { id } = await params
     const productId = parseInt(id)
 
     // Get product info
     const product = await sql`
-      SELECT * FROM products WHERE id = ${productId} LIMIT 1
+      SELECT * FROM products WHERE id = ${productId} AND user_id = ${userId} LIMIT 1
     `
 
     if (product.length === 0) {
@@ -27,7 +33,7 @@ export async function GET(
       FROM invoice_items ii
       JOIN invoices i ON ii.invoice_id = i.id
       JOIN stores s ON i.store_id = s.id
-      WHERE ii.product_id = ${productId}
+      WHERE ii.product_id = ${productId} AND ii.user_id = ${userId} AND i.user_id = ${userId} AND s.user_id = ${userId}
       ORDER BY i.purchase_date DESC
       LIMIT 20
     `
@@ -41,6 +47,8 @@ export async function GET(
       FROM invoice_items ii
       JOIN invoices i ON ii.invoice_id = i.id
       WHERE ii.product_id = ${productId}
+        AND ii.user_id = ${userId}
+        AND i.user_id = ${userId}
         AND i.purchase_date >= NOW() - INTERVAL '6 months'
     `
 
@@ -52,12 +60,16 @@ export async function GET(
            FROM invoice_items ii
            JOIN invoices i ON ii.invoice_id = i.id
            WHERE ii.product_id = ${productId}
+           AND ii.user_id = ${userId}
+           AND i.user_id = ${userId}
            ORDER BY i.purchase_date ASC
            LIMIT 1) as first_price,
           (SELECT ii.unit_price 
            FROM invoice_items ii
            JOIN invoices i ON ii.invoice_id = i.id
            WHERE ii.product_id = ${productId}
+           AND ii.user_id = ${userId}
+           AND i.user_id = ${userId}
            ORDER BY i.purchase_date DESC
            LIMIT 1) as last_price
       )

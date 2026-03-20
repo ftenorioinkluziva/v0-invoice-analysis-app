@@ -3,9 +3,16 @@ import { Pool } from '@neondatabase/serverless'
 import { ExtractedInvoice } from '@/lib/types'
 import { SaveInvoiceSchema } from '@/lib/validations'
 import { normalizeProductName, categorizeProduct, validateItemPrices, extractUnit } from '@/lib/invoice-utils'
+import { getSessionUserId } from '@/lib/auth-session'
+import { setAppUserId } from '@/lib/session-sql'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const invoices = await sql`
       SELECT 
         i.id,
@@ -16,9 +23,10 @@ export async function GET() {
         i.processed_at,
         s.name as store_name,
         s.cnpj as store_cnpj,
-        (SELECT COUNT(*) FROM invoice_items WHERE invoice_id = i.id) as item_count
+        (SELECT COUNT(*) FROM invoice_items WHERE invoice_id = i.id AND user_id = ${userId}) as item_count
       FROM invoices i
       LEFT JOIN stores s ON i.store_id = s.id
+      WHERE i.user_id = ${userId}
       ORDER BY i.purchase_date DESC
       LIMIT 50
     `
@@ -31,14 +39,22 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const parsed = SaveInvoiceSchema.safeParse(await request.json())
     if (!parsed.success) {
       return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
     }
     const { data, filename } = parsed.data
 
+
     const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
     const client = await pool.connect()
+    // Seta app.user_id para isolamento RLS estrito
+    await setAppUserId(client, userId)
 
     try {
       await client.query('BEGIN')
@@ -48,25 +64,25 @@ export async function POST(request: Request) {
 
       if (data.store_cnpj) {
         const result = await client.query(`
-          INSERT INTO stores (name, cnpj, address)
-          VALUES ($1, $2, $3)
+          INSERT INTO stores (name, cnpj, address, user_id)
+          VALUES ($1, $2, $3, $4)
           ON CONFLICT (cnpj) DO UPDATE SET name = EXCLUDED.name
           RETURNING id
-        `, [data.store_name, data.store_cnpj, data.store_address])
+        `, [data.store_name, data.store_cnpj, data.store_address, userId])
         storeId = result.rows[0].id
       } else {
         const existing = await client.query(`
-          SELECT id FROM stores WHERE name = $1 LIMIT 1
-        `, [data.store_name])
+          SELECT id FROM stores WHERE name = $1 AND user_id = $2 LIMIT 1
+        `, [data.store_name, userId])
         
         if (existing.rows.length > 0) {
           storeId = existing.rows[0].id
         } else {
           const result = await client.query(`
-            INSERT INTO stores (name, cnpj, address)
-            VALUES ($1, NULL, $2)
+            INSERT INTO stores (name, cnpj, address, user_id)
+            VALUES ($1, NULL, $2, $3)
             RETURNING id
-          `, [data.store_name, data.store_address])
+          `, [data.store_name, data.store_address, userId])
           storeId = result.rows[0].id
         }
       }
@@ -74,10 +90,10 @@ export async function POST(request: Request) {
       // Check for duplicate invoice
       const duplicate = await client.query(`
         SELECT id FROM invoices
-        WHERE (invoice_number IS NOT NULL AND invoice_number = $1)
-          OR (store_id = $2 AND purchase_date = $3 AND total_amount = $4)
+        WHERE user_id = $5 AND ((invoice_number IS NOT NULL AND invoice_number = $1)
+          OR (store_id = $2 AND purchase_date = $3 AND total_amount = $4))
         LIMIT 1
-      `, [data.invoice_number, storeId, data.purchase_date, data.total_amount])
+      `, [data.invoice_number, storeId, data.purchase_date, data.total_amount, userId])
       
       if (duplicate.rows.length > 0) {
         await client.query('ROLLBACK')
@@ -89,10 +105,10 @@ export async function POST(request: Request) {
       }
 
       const invoiceResult = await client.query(`
-        INSERT INTO invoices (store_id, invoice_number, purchase_date, total_amount, pdf_filename)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO invoices (store_id, invoice_number, purchase_date, total_amount, pdf_filename, user_id)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
-      `, [storeId, data.invoice_number, data.purchase_date, data.total_amount, filename])
+      `, [storeId, data.invoice_number, data.purchase_date, data.total_amount, filename, userId])
       const invoiceId = invoiceResult.rows[0].id
 
       // Process items
@@ -102,33 +118,33 @@ export async function POST(request: Request) {
         const category = categorizeProduct(validated.description)
 
         const productResult = await client.query(`
-          SELECT id FROM products WHERE normalized_name = $1 LIMIT 1
-        `, [normalizedName])
+          SELECT id FROM products WHERE normalized_name = $1 AND user_id = $2 LIMIT 1
+        `, [normalizedName, userId])
 
         let productId: number
 
         if (productResult.rows.length === 0) {
           const newProduct = await client.query(`
-            INSERT INTO products (normalized_name, category, unit)
-            VALUES ($1, $2, $3)
+            INSERT INTO products (normalized_name, category, unit, user_id)
+            VALUES ($1, $2, $3, $4)
             RETURNING id
-          `, [normalizedName, category, extractUnit(validated.description)])
+          `, [normalizedName, category, extractUnit(validated.description), userId])
           productId = newProduct.rows[0].id
         } else {
           productId = productResult.rows[0].id
         }
 
         await client.query(`
-          INSERT INTO invoice_items (invoice_id, product_id, raw_description, quantity, unit_price, total_price)
-          VALUES ($1, $2, $3, $4, $5, $6)
-        `, [invoiceId, productId, validated.description, validated.quantity, validated.unit_price, validated.total_price])
+          INSERT INTO invoice_items (invoice_id, product_id, raw_description, quantity, unit_price, total_price, user_id)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `, [invoiceId, productId, validated.description, validated.quantity, validated.unit_price, validated.total_price, userId])
       }
 
       await client.query('COMMIT')
       client.release()
 
       // Check for price alerts
-      await generatePriceAlerts(data.items)
+      await generatePriceAlerts(data.items, userId)
 
       return Response.json({ 
         success: true, 
@@ -147,9 +163,9 @@ export async function POST(request: Request) {
 }
 
 
-async function generatePriceAlerts(items: ExtractedInvoice['items']) {
+async function generatePriceAlerts(items: ExtractedInvoice['items'], userId: string) {
   // Obter configurações de notificação dinamicamente
-  const prefsConf = await sql`SELECT alert_threshold, notify_price_increase FROM user_preferences WHERE id = 1`
+  const prefsConf = await sql`SELECT alert_threshold, notify_price_increase FROM user_preferences WHERE user_id = ${userId} LIMIT 1`
   const threshold = prefsConf.length > 0 ? Number(prefsConf[0].alert_threshold) : 15
   const notifyPriceIncrease = prefsConf.length > 0 ? prefsConf[0].notify_price_increase : true
 
@@ -164,7 +180,7 @@ async function generatePriceAlerts(items: ExtractedInvoice['items']) {
       FROM invoice_items ii
       JOIN products p ON ii.product_id = p.id
       JOIN invoices i ON ii.invoice_id = i.id
-      WHERE p.normalized_name = ${normalizedName}
+      WHERE p.normalized_name = ${normalizedName} AND p.user_id = ${userId} AND ii.user_id = ${userId} AND i.user_id = ${userId}
       ORDER BY i.purchase_date DESC
       LIMIT 5
     `
@@ -176,17 +192,18 @@ async function generatePriceAlerts(items: ExtractedInvoice['items']) {
 
       if (variation > threshold) {
         const productResult = await sql`
-          SELECT id FROM products WHERE normalized_name = ${normalizedName} LIMIT 1
+          SELECT id FROM products WHERE normalized_name = ${normalizedName} AND user_id = ${userId} LIMIT 1
         `
         
         if (productResult.length > 0) {
           await sql`
-            INSERT INTO alerts (product_id, alert_type, message, data)
+            INSERT INTO alerts (product_id, alert_type, message, data, user_id)
             VALUES (
               ${productResult[0].id}, 
               'price_increase',
               ${`${item.description} aumentou ${variation.toFixed(1)}%`},
-              ${JSON.stringify({ previous_price: previousPrice, current_price: currentPrice, variation })}
+              ${JSON.stringify({ previous_price: previousPrice, current_price: currentPrice, variation })},
+              ${userId}
             )
           `
         }

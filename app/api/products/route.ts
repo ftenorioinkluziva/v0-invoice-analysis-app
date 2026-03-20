@@ -1,4 +1,5 @@
 import { sql } from '@/lib/db'
+import { getSessionUserId } from '@/lib/auth-session'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -6,6 +7,11 @@ export async function GET(request: Request) {
   const category = searchParams.get('category') || ''
 
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     let products
 
     if (search || category) {
@@ -23,6 +29,7 @@ export async function GET(request: Request) {
         LEFT JOIN invoice_items ii ON ii.product_id = p.id
         LEFT JOIN invoices i ON ii.invoice_id = i.id
         WHERE 
+          p.user_id = ${userId} AND
           (${search} = '' OR p.normalized_name ILIKE ${'%' + search + '%'})
           AND (${category} = '' OR p.category = ${category})
         GROUP BY p.id, p.normalized_name, p.category, p.brand, p.unit
@@ -43,6 +50,7 @@ export async function GET(request: Request) {
         FROM products p
         LEFT JOIN invoice_items ii ON ii.product_id = p.id
         LEFT JOIN invoices i ON ii.invoice_id = i.id
+        WHERE p.user_id = ${userId}
         GROUP BY p.id, p.normalized_name, p.category, p.brand, p.unit
         ORDER BY purchase_count DESC
         LIMIT 50
@@ -51,7 +59,7 @@ export async function GET(request: Request) {
 
     // Get categories for filter
     const categories = await sql`
-      SELECT DISTINCT category FROM products WHERE category IS NOT NULL ORDER BY category
+      SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND user_id = ${userId} ORDER BY category
     `
 
     return Response.json({

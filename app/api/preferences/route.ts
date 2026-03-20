@@ -1,19 +1,34 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@/lib/db'
 import { Pool } from '@neondatabase/serverless'
+import { getSessionUserId } from '@/lib/auth-session'
+import { setAppUserId } from '@/lib/session-sql'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const rows = await sql`SELECT * FROM user_preferences WHERE id = 1`
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const rows = await sql`SELECT * FROM user_preferences WHERE user_id = ${userId} LIMIT 1`
     
     if (rows.length === 0) {
+      const created = await sql`
+        INSERT INTO user_preferences (
+          alert_threshold,
+          notify_price_increase,
+          notify_opportunities,
+          notify_restock_reminders,
+          notify_weekly_summary,
+          user_id
+        )
+        VALUES (15, true, true, true, false, ${userId})
+        RETURNING *
+      `
+
       return NextResponse.json({
-        id: 1,
-        alert_threshold: 15,
-        notify_price_increase: true,
-        notify_opportunities: true,
-        notify_restock_reminders: true,
-        notify_weekly_summary: false,
+        ...created[0],
       })
     }
 
@@ -29,6 +44,11 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const data = await request.json()
     
     const updates = []
@@ -60,15 +80,33 @@ export async function PATCH(request: Request) {
     const query = `
       UPDATE user_preferences 
       SET ${updates.join(', ')} 
-      WHERE id = 1 
+      WHERE user_id = $${i}
       RETURNING *
     `
+    values.push(userId)
     const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-    const { rows } = await pool.query(query, values)
-    await pool.end()
+    const client = await pool.connect()
+    await setAppUserId(client, userId)
+    const { rows } = await client.query(query, values)
+    client.release()
     
     if (rows.length === 0) {
-        return NextResponse.json({ error: 'Preferences not found' }, { status: 404 })
+      const insertedFields = ['user_id', ...validFields.filter((key) => data[key] !== undefined)]
+      const insertedValues = [userId, ...validFields.filter((key) => data[key] !== undefined).map((key) => data[key])]
+      const placeholders = insertedValues.map((_, index) => `$${index + 1}`).join(', ')
+      const insertQuery = `
+        INSERT INTO user_preferences (${insertedFields.join(', ')})
+        VALUES (${placeholders})
+        RETURNING *
+      `
+
+      const poolInsert = new Pool({ connectionString: process.env.DATABASE_URL })
+      const clientInsert = await poolInsert.connect()
+      await setAppUserId(clientInsert, userId)
+      const insertResult = await clientInsert.query(insertQuery, insertedValues)
+      clientInsert.release()
+
+      return NextResponse.json(insertResult.rows[0])
     }
 
     return NextResponse.json(rows[0])

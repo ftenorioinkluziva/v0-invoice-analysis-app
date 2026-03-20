@@ -1,8 +1,14 @@
 import { sql } from '@/lib/db'
 import { DashboardStats } from '@/lib/types'
+import { getSessionUserId } from '@/lib/auth-session'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const now = new Date()
     const currentMonth = now.toISOString().slice(0, 7)
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
@@ -13,14 +19,14 @@ export async function GET() {
     const currentMonthSpent = await sql`
       SELECT COALESCE(SUM(total_amount), 0) as total
       FROM invoices
-      WHERE TO_CHAR(purchase_date, 'YYYY-MM') = ${currentMonth}
+      WHERE TO_CHAR(purchase_date, 'YYYY-MM') = ${currentMonth} AND user_id = ${userId}
     `
 
     // Total spent last month
     const lastMonthSpent = await sql`
       SELECT COALESCE(SUM(total_amount), 0) as total
       FROM invoices
-      WHERE TO_CHAR(purchase_date, 'YYYY-MM') = ${lastMonth}
+      WHERE TO_CHAR(purchase_date, 'YYYY-MM') = ${lastMonth} AND user_id = ${userId}
     `
 
     const totalThisMonth = Number(currentMonthSpent[0].total)
@@ -32,8 +38,8 @@ export async function GET() {
     // Total invoices and products
     const counts = await sql`
       SELECT 
-        (SELECT COUNT(*) FROM invoices) as invoice_count,
-        (SELECT COUNT(*) FROM products) as product_count
+        (SELECT COUNT(*) FROM invoices WHERE user_id = ${userId}) as invoice_count,
+        (SELECT COUNT(*) FROM products WHERE user_id = ${userId}) as product_count
     `
 
     const spendingByMonth = await sql`
@@ -41,6 +47,7 @@ export async function GET() {
         TO_CHAR(purchase_date, 'YYYY-MM') as month,
         SUM(total_amount) as total
       FROM invoices
+      WHERE user_id = ${userId}
       GROUP BY TO_CHAR(purchase_date, 'YYYY-MM')
       ORDER BY month ASC
     `
@@ -57,7 +64,7 @@ export async function GET() {
         FROM invoice_items ii
         JOIN products p ON ii.product_id = p.id
         JOIN invoices i ON ii.invoice_id = i.id
-        WHERE i.purchase_date >= NOW() - INTERVAL '3 months'
+        WHERE i.purchase_date >= NOW() - INTERVAL '3 months' AND ii.user_id = ${userId} AND p.user_id = ${userId} AND i.user_id = ${userId}
       ),
       price_comparison AS (
         SELECT 
@@ -100,7 +107,7 @@ export async function GET() {
         FROM products p
         JOIN invoice_items ii ON ii.product_id = p.id
         JOIN invoices i ON ii.invoice_id = i.id
-        WHERE i.purchase_date >= NOW() - INTERVAL '3 months'
+        WHERE i.purchase_date >= NOW() - INTERVAL '3 months' AND p.user_id = ${userId} AND ii.user_id = ${userId} AND i.user_id = ${userId}
         GROUP BY p.id, p.normalized_name
         HAVING COUNT(ii.id) >= 2
       ),

@@ -1,16 +1,22 @@
 import { sql } from '@/lib/db'
 import { AddListItemSchema, UpdateListItemSchema, DeleteListItemSchema } from '@/lib/validations'
+import { getSessionUserId } from '@/lib/auth-session'
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getSessionUserId(_request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { id } = await params
     const listId = parseInt(id)
 
     const list = await sql`
-      SELECT * FROM shopping_lists WHERE id = ${listId} LIMIT 1
+      SELECT * FROM shopping_lists WHERE id = ${listId} AND user_id = ${userId} LIMIT 1
     `
 
     if (list.length === 0) {
@@ -42,7 +48,7 @@ export async function GET(
         ) as price_variation
       FROM shopping_list_items sli
       JOIN products p ON sli.product_id = p.id
-      WHERE sli.list_id = ${listId}
+      WHERE sli.list_id = ${listId} AND sli.user_id = ${userId} AND p.user_id = ${userId}
       ORDER BY sli.checked ASC, p.category ASC, p.normalized_name ASC
     `
 
@@ -59,8 +65,9 @@ export async function GET(
       FROM products p
       JOIN invoice_items ii ON ii.product_id = p.id
       JOIN invoices i ON ii.invoice_id = i.id
-      WHERE p.id NOT IN (
-        SELECT product_id FROM shopping_list_items WHERE list_id = ${listId}
+      WHERE p.user_id = ${userId} AND ii.user_id = ${userId} AND i.user_id = ${userId}
+      AND p.id NOT IN (
+        SELECT product_id FROM shopping_list_items WHERE list_id = ${listId} AND user_id = ${userId}
       )
       GROUP BY p.id, p.normalized_name, p.category
       HAVING COUNT(ii.id) >= 2
@@ -95,8 +102,19 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { id } = await params
     const listId = parseInt(id)
+    const listOwnership = await sql`
+      SELECT id FROM shopping_lists WHERE id = ${listId} AND user_id = ${userId} LIMIT 1
+    `
+    if (listOwnership.length === 0) {
+      return Response.json({ error: 'List not found' }, { status: 404 })
+    }
     const parsed = AddListItemSchema.safeParse(await request.json())
     if (!parsed.success) {
       return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
@@ -107,7 +125,7 @@ export async function POST(
     const existingItem = await sql`
       SELECT id, quantity 
       FROM shopping_list_items 
-      WHERE list_id = ${listId} AND product_id = ${product_id}
+      WHERE list_id = ${listId} AND product_id = ${product_id} AND user_id = ${userId}
     `
 
     if (existingItem.length > 0) {
@@ -115,7 +133,7 @@ export async function POST(
       const updateResult = await sql`
         UPDATE shopping_list_items 
         SET quantity = ${newQuantity} 
-        WHERE id = ${existingItem[0].id}
+        WHERE id = ${existingItem[0].id} AND user_id = ${userId}
         RETURNING id
       `
       return Response.json({ success: true, itemId: updateResult[0].id, updated: true })
@@ -126,7 +144,7 @@ export async function POST(
       SELECT ii.unit_price
       FROM invoice_items ii
       JOIN invoices i ON ii.invoice_id = i.id
-      WHERE ii.product_id = ${product_id}
+      WHERE ii.product_id = ${product_id} AND ii.user_id = ${userId} AND i.user_id = ${userId}
       ORDER BY i.purchase_date DESC
       LIMIT 1
     `
@@ -134,8 +152,8 @@ export async function POST(
     const estimatedPrice = lastPrice.length > 0 ? lastPrice[0].unit_price : null
 
     const result = await sql`
-      INSERT INTO shopping_list_items (list_id, product_id, quantity, estimated_price)
-      VALUES (${listId}, ${product_id}, ${quantity}, ${estimatedPrice})
+      INSERT INTO shopping_list_items (list_id, product_id, quantity, estimated_price, user_id)
+      VALUES (${listId}, ${product_id}, ${quantity}, ${estimatedPrice}, ${userId})
       RETURNING id
     `
 
@@ -151,8 +169,19 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { id } = await params
     const listId = parseInt(id)
+    const listOwnership = await sql`
+      SELECT id FROM shopping_lists WHERE id = ${listId} AND user_id = ${userId} LIMIT 1
+    `
+    if (listOwnership.length === 0) {
+      return Response.json({ error: 'List not found' }, { status: 404 })
+    }
     const parsed = UpdateListItemSchema.safeParse(await request.json())
     if (!parsed.success) {
       return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
@@ -162,18 +191,18 @@ export async function PATCH(
     if (status) {
       // Update list status
       await sql`
-        UPDATE shopping_lists SET status = ${status} WHERE id = ${listId}
+        UPDATE shopping_lists SET status = ${status} WHERE id = ${listId} AND user_id = ${userId}
       `
     } else if (item_id !== undefined) {
       // Update item
       if (checked !== undefined) {
         await sql`
-          UPDATE shopping_list_items SET checked = ${checked} WHERE id = ${item_id}
+          UPDATE shopping_list_items SET checked = ${checked} WHERE id = ${item_id} AND user_id = ${userId}
         `
       }
       if (quantity !== undefined) {
         await sql`
-          UPDATE shopping_list_items SET quantity = ${quantity} WHERE id = ${item_id}
+          UPDATE shopping_list_items SET quantity = ${quantity} WHERE id = ${item_id} AND user_id = ${userId}
         `
       }
     }
@@ -190,8 +219,19 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { id } = await params
     const listId = parseInt(id)
+    const listOwnership = await sql`
+      SELECT id FROM shopping_lists WHERE id = ${listId} AND user_id = ${userId} LIMIT 1
+    `
+    if (listOwnership.length === 0) {
+      return Response.json({ error: 'List not found' }, { status: 404 })
+    }
     const parsed = DeleteListItemSchema.safeParse(await request.json())
     if (!parsed.success) {
       return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
@@ -199,10 +239,10 @@ export async function DELETE(
     const { item_id } = parsed.data
 
     if (item_id) {
-      await sql`DELETE FROM shopping_list_items WHERE id = ${item_id}`
+      await sql`DELETE FROM shopping_list_items WHERE id = ${item_id} AND user_id = ${userId}`
     } else {
-      await sql`DELETE FROM shopping_list_items WHERE list_id = ${listId}`
-      await sql`DELETE FROM shopping_lists WHERE id = ${listId}`
+      await sql`DELETE FROM shopping_list_items WHERE list_id = ${listId} AND user_id = ${userId}`
+      await sql`DELETE FROM shopping_lists WHERE id = ${listId} AND user_id = ${userId}`
     }
 
     return Response.json({ success: true })
