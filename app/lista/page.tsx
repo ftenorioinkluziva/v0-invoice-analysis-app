@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import useSWR from 'swr'
 import {
   Plus,
@@ -75,6 +75,9 @@ type CustomItem = {
   checked: boolean
 }
 
+const MIN_QUANTITY = 1
+const UNIT_PRICE_SUFFIX = '/ unidade'
+
 export default function ListaPage() {
   const [selectedListId, setSelectedListId] = useState<number | null>(null)
   const [newListName, setNewListName] = useState('')
@@ -82,6 +85,7 @@ export default function ListaPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [customItems, setCustomItems] = useState<CustomItem[]>([])
+  const quantityUpdateTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -89,6 +93,12 @@ export default function ListaPage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [searchQuery])
+
+  useEffect(() => {
+    return () => {
+      Object.values(quantityUpdateTimers.current).forEach((timer) => clearTimeout(timer))
+    }
+  }, [])
   const [showFinishDialog, setShowFinishDialog] = useState(false)
   const [isFinishing, setIsFinishing] = useState(false)
   const [showCustomInput, setShowCustomInput] = useState(false)
@@ -185,6 +195,43 @@ export default function ListaPage() {
 
   const handleDeleteCustomItem = (id: string) => {
     setCustomItems((prev) => prev.filter((item) => item.id !== id))
+  }
+
+  const handleUpdateQuantity = (itemId: number, quantity: number) => {
+    if (!selectedListId) return
+    const newQuantity = Math.max(MIN_QUANTITY, quantity)
+
+    mutateDetails((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        items: current.items.map((item) =>
+          item.id === itemId ? { ...item, quantity: newQuantity } : item
+        ),
+      }
+    }, false)
+
+    const existingTimer = quantityUpdateTimers.current[itemId]
+    if (existingTimer) clearTimeout(existingTimer)
+
+    quantityUpdateTimers.current[itemId] = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/shopping-lists/${selectedListId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ item_id: itemId, quantity: newQuantity }),
+        })
+
+        if (!response.ok) {
+          throw new Error('Falha ao atualizar quantidade')
+        }
+
+        await Promise.all([mutateDetails(), mutateLists()])
+      } catch (error) {
+        toast.error('Não foi possível atualizar a quantidade.')
+        await Promise.all([mutateDetails(), mutateLists()])
+      }
+    }, 300)
   }
 
   const handleFinishList = async () => {
@@ -518,18 +565,44 @@ export default function ListaPage() {
                         }
                         className="h-5 w-5"
                       />
-                      <div className="flex-1">
-                        <p
-                          className={cn(
-                            'text-sm font-medium capitalize',
-                            item.checked && 'line-through'
-                          )}
-                        >
-                          {item.normalized_name}
-                        </p>
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p
+                            className={cn(
+                              'text-sm font-medium capitalize',
+                              item.checked && 'line-through'
+                            )}
+                          >
+                            {item.normalized_name}
+                          </p>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                              disabled={item.quantity <= MIN_QUANTITY}
+                              aria-label="Diminuir quantidade"
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <span className="min-w-[1.5rem] text-center text-sm font-medium">
+                              {item.quantity}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                              aria-label="Aumentar quantidade"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground">
-                            {item.quantity}x {formatCurrency(item.last_price || 0)}
+                            {formatCurrency(item.last_price || item.estimated_price || 0)} {UNIT_PRICE_SUFFIX}
                           </span>
                           {item.price_variation !== 0 && (
                             <span
