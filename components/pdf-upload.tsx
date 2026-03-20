@@ -25,8 +25,9 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
   const [showPreview, setShowPreview] = useState(false)
 
   const handleFileSelect = useCallback(async (file: File) => {
-    if (file.type !== 'application/pdf') {
-      setError('Por favor, selecione um arquivo PDF')
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      setError('Por favor, selecione um PDF ou uma imagem (JPG, PNG, WEBP)')
       return
     }
 
@@ -143,7 +144,7 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
           >
             <input
               type="file"
-              accept="application/pdf"
+              accept="application/pdf,image/jpeg,image/png,image/webp"
               className="hidden"
               onChange={handleInputChange}
               disabled={status !== 'idle'}

@@ -103,6 +103,24 @@ export async function POST(
     }
     const { product_id, quantity } = parsed.data
 
+    // Verificação de duplicata para efetuar o UPSERT
+    const existingItem = await sql`
+      SELECT id, quantity 
+      FROM shopping_list_items 
+      WHERE list_id = ${listId} AND product_id = ${product_id}
+    `
+
+    if (existingItem.length > 0) {
+      const newQuantity = Number(existingItem[0].quantity) + quantity
+      const updateResult = await sql`
+        UPDATE shopping_list_items 
+        SET quantity = ${newQuantity} 
+        WHERE id = ${existingItem[0].id}
+        RETURNING id
+      `
+      return Response.json({ success: true, itemId: updateResult[0].id, updated: true })
+    }
+
     // Get estimated price from last purchase
     const lastPrice = await sql`
       SELECT ii.unit_price

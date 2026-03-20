@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import {
   Plus,
@@ -13,9 +13,16 @@ import {
   ChevronRight,
   Sparkles,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion'
 import {
   Dialog,
   DialogContent,
@@ -73,7 +80,17 @@ export default function ListaPage() {
   const [newListName, setNewListName] = useState('')
   const [showNewListDialog, setShowNewListDialog] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [customItems, setCustomItems] = useState<CustomItem[]>([])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+  const [showFinishDialog, setShowFinishDialog] = useState(false)
+  const [isFinishing, setIsFinishing] = useState(false)
 
   const { data: listsData, error: listsError, mutate: mutateLists } = useSWR<{ lists: ShoppingList[] }>(
     '/api/shopping-lists',
@@ -93,7 +110,7 @@ export default function ListaPage() {
       category: string | null
       avg_price: number
     }>
-  }>(searchQuery ? `/api/products?search=${encodeURIComponent(searchQuery)}` : null, fetcher)
+  }>(debouncedSearchQuery ? `/api/products?search=${encodeURIComponent(debouncedSearchQuery)}` : null, fetcher)
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -168,6 +185,29 @@ export default function ListaPage() {
     setCustomItems((prev) => prev.filter((item) => item.id !== id))
   }
 
+  const handleFinishList = async () => {
+    if (!selectedListId) return
+    setIsFinishing(true)
+    try {
+      const res = await fetch(`/api/shopping-lists/${selectedListId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed' }),
+      })
+      if (!res.ok) throw new Error('Erro ao finalizar')
+      
+      toast.success('Lista finalizada com sucesso!')
+      setShowFinishDialog(false)
+      setSelectedListId(null)
+      setCustomItems([])
+      mutateLists()
+    } catch (error) {
+      toast.error('Ocorreu um erro ao finalizar a lista.')
+    } finally {
+      setIsFinishing(false)
+    }
+  }
+
   // Group items by category
   const groupedItems = listDetails?.items.reduce((acc, item) => {
     const category = item.category || 'Outros'
@@ -181,6 +221,9 @@ export default function ListaPage() {
       (sum, item) => sum + (item.last_price || item.estimated_price || 0) * item.quantity,
       0
     ) || 0
+
+  const activeLists = listsData?.lists?.filter((l) => l.status === 'active') || []
+  const completedLists = listsData?.lists?.filter((l) => l.status === 'completed') || []
 
   // List view
   if (!selectedListId) {
@@ -223,32 +266,90 @@ export default function ListaPage() {
         {listsError ? (
           <ErrorState message="Erro ao carregar listas" onRetry={() => mutateLists()} />
         ) : listsData?.lists && listsData.lists.length > 0 ? (
-          <div className="space-y-2">
-            {listsData.lists.map((list) => (
-              <Card
-                key={list.id}
-                className="cursor-pointer bg-card transition-colors hover:bg-secondary/50"
-                onClick={() => setSelectedListId(list.id)}
-              >
-                <CardContent className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-lg bg-primary/10 p-2">
-                      <ShoppingCart className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="font-medium">{list.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {list.checked_count || 0}/{list.item_count || 0} itens
-                        {list.estimated_total > 0 &&
-                          ` • ${formatCurrency(Number(list.estimated_total))}`}
-                      </p>
-                    </div>
+          <>
+            {activeLists.length > 0 ? (
+              <div className="space-y-2">
+                {activeLists.map((list) => (
+                  <Card
+                    key={list.id}
+                    className="cursor-pointer bg-card transition-colors hover:bg-secondary/50"
+                    onClick={() => setSelectedListId(list.id)}
+                  >
+                    <CardContent className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="rounded-lg bg-primary/10 p-2">
+                          <ShoppingCart className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{list.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {list.checked_count || 0}/{list.item_count || 0} itens
+                            {list.estimated_total > 0 &&
+                              ` • ${formatCurrency(Number(list.estimated_total))}`}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card className="bg-card">
+                <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
+                  <div className="rounded-full bg-secondary p-4">
+                    <Check className="h-8 w-8 text-muted-foreground" />
                   </div>
-                  <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">Nenhuma lista ativa</p>
+                    <p className="text-sm text-muted-foreground">
+                      Todas as suas compras foram concluídas
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
+            )}
+
+            {completedLists.length > 0 && (
+              <div className="mt-8">
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="completed" className="border-none">
+                    <AccordionTrigger className="rounded-lg bg-secondary/30 px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-secondary/50 hover:no-underline">
+                      Listas Finalizadas ({completedLists.length})
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-2 pt-2">
+                        {completedLists.map((list) => (
+                          <Card
+                            key={list.id}
+                            className="cursor-pointer bg-card/50 transition-colors hover:bg-secondary/50"
+                            onClick={() => setSelectedListId(list.id)}
+                          >
+                            <CardContent className="flex items-center justify-between p-4 opacity-80">
+                              <div className="flex items-center gap-3">
+                                <div className="rounded-lg bg-secondary p-2">
+                                  <Check className="h-5 w-5 text-muted-foreground" />
+                                </div>
+                                <div>
+                                  <p className="font-medium text-muted-foreground">{list.name}</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    {list.checked_count || 0}/{list.item_count || 0} itens
+                                    {list.estimated_total > 0 &&
+                                      ` • ${formatCurrency(Number(list.estimated_total))}`}
+                                  </p>
+                                </div>
+                              </div>
+                              <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+            )}
+          </>
         ) : (
           <Card className="bg-card">
             <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
@@ -490,11 +591,31 @@ export default function ListaPage() {
       )}
 
       {/* Finish shopping button */}
-      {(listDetails?.items?.length || customItems.length > 0) && (
-        <Button className="mt-2" size="lg">
-          <Check className="mr-2 h-4 w-4" />
-          Finalizar Compras
-        </Button>
+      {(listDetails?.items?.length || customItems.length > 0) && listDetails?.list.status !== 'completed' && (
+        <Dialog open={showFinishDialog} onOpenChange={setShowFinishDialog}>
+          <DialogTrigger asChild>
+            <Button className="mt-2" size="lg">
+              <Check className="mr-2 h-4 w-4" />
+              Finalizar Compras
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="bg-card">
+            <DialogHeader>
+              <DialogTitle>Finalizar Compras</DialogTitle>
+              <DialogDescription>
+                Tem certeza de que deseja finalizar esta lista? Ela será arquivada e movida para a seção de finalizadas.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowFinishDialog(false)} disabled={isFinishing}>
+                Cancelar
+              </Button>
+              <Button onClick={handleFinishList} disabled={isFinishing}>
+                {isFinishing ? 'Finalizando...' : 'Finalizar Lista'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )

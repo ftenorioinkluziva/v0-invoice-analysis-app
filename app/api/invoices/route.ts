@@ -1,6 +1,8 @@
 import { sql } from '@/lib/db'
+import { Pool } from '@neondatabase/serverless'
 import { ExtractedInvoice } from '@/lib/types'
 import { SaveInvoiceSchema } from '@/lib/validations'
+import { normalizeProductName, categorizeProduct, validateItemPrices, extractUnit } from '@/lib/invoice-utils'
 
 export async function GET() {
   try {
@@ -35,170 +37,124 @@ export async function POST(request: Request) {
     }
     const { data, filename } = parsed.data
 
-    // Upsert store — match by CNPJ when available, fallback to name
-    let storeId: number
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
+    const client = await pool.connect()
 
-    if (data.store_cnpj) {
-      const result = await sql`
-        INSERT INTO stores (name, cnpj, address)
-        VALUES (${data.store_name}, ${data.store_cnpj}, ${data.store_address})
-        ON CONFLICT (cnpj) DO UPDATE SET name = EXCLUDED.name
-        RETURNING id
-      `
-      storeId = result[0].id
-    } else {
-      const existing = await sql`
-        SELECT id FROM stores WHERE name = ${data.store_name} LIMIT 1
-      `
-      if (existing.length > 0) {
-        storeId = existing[0].id
-      } else {
-        const result = await sql`
+    try {
+      await client.query('BEGIN')
+
+      // Upsert store — match by CNPJ when available, fallback to name
+      let storeId: number
+
+      if (data.store_cnpj) {
+        const result = await client.query(`
           INSERT INTO stores (name, cnpj, address)
-          VALUES (${data.store_name}, NULL, ${data.store_address})
+          VALUES ($1, $2, $3)
+          ON CONFLICT (cnpj) DO UPDATE SET name = EXCLUDED.name
           RETURNING id
-        `
-        storeId = result[0].id
-      }
-    }
-
-    // Check for duplicate invoice
-    const duplicate = await sql`
-      SELECT id FROM invoices
-      WHERE (invoice_number IS NOT NULL AND invoice_number = ${data.invoice_number})
-        OR (store_id = ${storeId} AND purchase_date = ${data.purchase_date} AND total_amount = ${data.total_amount})
-      LIMIT 1
-    `
-    if (duplicate.length > 0) {
-      return Response.json(
-        { error: 'Nota fiscal já importada', duplicateInvoiceId: duplicate[0].id },
-        { status: 409 }
-      )
-    }
-
-    const invoiceResult = await sql`
-      INSERT INTO invoices (store_id, invoice_number, purchase_date, total_amount, pdf_filename)
-      VALUES (${storeId}, ${data.invoice_number}, ${data.purchase_date}, ${data.total_amount}, ${filename})
-      RETURNING id
-    `
-    const invoiceId = invoiceResult[0].id
-
-    // Process items
-    for (const item of data.items) {
-      const validated = validateItemPrices(item)
-      const normalizedName = normalizeProductName(validated.description)
-      const category = categorizeProduct(validated.description)
-
-      let productResult = await sql`
-        SELECT id FROM products WHERE normalized_name = ${normalizedName} LIMIT 1
-      `
-
-      let productId: number
-
-      if (productResult.length === 0) {
-        const newProduct = await sql`
-          INSERT INTO products (normalized_name, category, unit)
-          VALUES (${normalizedName}, ${category}, ${extractUnit(validated.description)})
-          RETURNING id
-        `
-        productId = newProduct[0].id
+        `, [data.store_name, data.store_cnpj, data.store_address])
+        storeId = result.rows[0].id
       } else {
-        productId = productResult[0].id
+        const existing = await client.query(`
+          SELECT id FROM stores WHERE name = $1 LIMIT 1
+        `, [data.store_name])
+        
+        if (existing.rows.length > 0) {
+          storeId = existing.rows[0].id
+        } else {
+          const result = await client.query(`
+            INSERT INTO stores (name, cnpj, address)
+            VALUES ($1, NULL, $2)
+            RETURNING id
+          `, [data.store_name, data.store_address])
+          storeId = result.rows[0].id
+        }
       }
 
-      await sql`
-        INSERT INTO invoice_items (invoice_id, product_id, raw_description, quantity, unit_price, total_price)
-        VALUES (${invoiceId}, ${productId}, ${validated.description}, ${validated.quantity}, ${validated.unit_price}, ${validated.total_price})
-      `
+      // Check for duplicate invoice
+      const duplicate = await client.query(`
+        SELECT id FROM invoices
+        WHERE (invoice_number IS NOT NULL AND invoice_number = $1)
+          OR (store_id = $2 AND purchase_date = $3 AND total_amount = $4)
+        LIMIT 1
+      `, [data.invoice_number, storeId, data.purchase_date, data.total_amount])
+      
+      if (duplicate.rows.length > 0) {
+        await client.query('ROLLBACK')
+        client.release()
+        return Response.json(
+          { error: 'Nota fiscal já importada', duplicateInvoiceId: duplicate.rows[0].id },
+          { status: 409 }
+        )
+      }
+
+      const invoiceResult = await client.query(`
+        INSERT INTO invoices (store_id, invoice_number, purchase_date, total_amount, pdf_filename)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+      `, [storeId, data.invoice_number, data.purchase_date, data.total_amount, filename])
+      const invoiceId = invoiceResult.rows[0].id
+
+      // Process items
+      for (const item of data.items) {
+        const validated = validateItemPrices(item)
+        const normalizedName = normalizeProductName(validated.description)
+        const category = categorizeProduct(validated.description)
+
+        const productResult = await client.query(`
+          SELECT id FROM products WHERE normalized_name = $1 LIMIT 1
+        `, [normalizedName])
+
+        let productId: number
+
+        if (productResult.rows.length === 0) {
+          const newProduct = await client.query(`
+            INSERT INTO products (normalized_name, category, unit)
+            VALUES ($1, $2, $3)
+            RETURNING id
+          `, [normalizedName, category, extractUnit(validated.description)])
+          productId = newProduct.rows[0].id
+        } else {
+          productId = productResult.rows[0].id
+        }
+
+        await client.query(`
+          INSERT INTO invoice_items (invoice_id, product_id, raw_description, quantity, unit_price, total_price)
+          VALUES ($1, $2, $3, $4, $5, $6)
+        `, [invoiceId, productId, validated.description, validated.quantity, validated.unit_price, validated.total_price])
+      }
+
+      await client.query('COMMIT')
+      client.release()
+
+      // Check for price alerts
+      await generatePriceAlerts(data.items)
+
+      return Response.json({ 
+        success: true, 
+        invoiceId,
+        message: `Invoice saved with ${data.items.length} items` 
+      })
+    } catch (txError) {
+      await client.query('ROLLBACK')
+      client.release()
+      throw txError
     }
-
-    // Check for price alerts
-    await generatePriceAlerts(data.items)
-
-    return Response.json({ 
-      success: true, 
-      invoiceId,
-      message: `Invoice saved with ${data.items.length} items` 
-    })
   } catch (error) {
     console.error('Error saving invoice:', error)
     return Response.json({ error: 'Failed to save invoice' }, { status: 500 })
   }
 }
 
-type ItemInput = { description: string; quantity: number; unit_price: number; total_price: number }
-
-function validateItemPrices(item: ItemInput): ItemInput {
-  const { quantity, unit_price, total_price } = item
-  if (quantity <= 0 || total_price <= 0) return item
-
-  const calculatedUnit = total_price / quantity
-  const tolerance = Math.max(total_price * 0.05, 0.10)
-
-  // If unit_price × quantity is close to total_price, data is consistent
-  if (Math.abs(unit_price * quantity - total_price) <= tolerance) return item
-
-  // Mismatch detected — trust total_price and quantity, recalculate unit_price
-  return { ...item, unit_price: Math.round(calculatedUnit * 100) / 100 }
-}
-
-const STOP_WORDS = new Set(['de', 'da', 'do', 'dos', 'das', 'a', 'o', 'um', 'uma', 'e', 'com', 'para', 'em', 'un', 'und'])
-const UNIT_WORDS = new Set(['kg', 'ml', 'lt', 'g', 'gr', 'pc', 'pct', 'cx'])
-
-function normalizeProductName(description: string): string {
-  const lower = description.toLowerCase()
-
-  // Extract size+unit (e.g. "200gr", "1,03kg", "500ml") — this IS part of the product identity
-  const sizeMatch = lower.match(/(\d+[,.]?\d*)\s*(ml|l|g|gr|kg|pc|pct|cx|lt)\b/)
-  const size = sizeMatch
-    ? sizeMatch[1].replace(',', '.') + sizeMatch[2].replace('gr', 'g')
-    : null
-
-  const name = lower
-    .replace(/\d+[,.]?\d*\s*(ml|l|g|gr|kg|un|pc|pct|cx|lt)\b/gi, '')
-    .replace(/[-–—]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .filter(w => !STOP_WORDS.has(w) && !UNIT_WORDS.has(w) && w.length > 1)
-    .slice(0, 4)
-    .join(' ')
-
-  return size ? `${name} ${size}` : name
-}
-
-function categorizeProduct(description: string): string {
-  const desc = description.toLowerCase()
-  
-  const categories: Record<string, string[]> = {
-    'Laticínios': ['leite', 'queijo', 'iogurte', 'manteiga', 'requeijão', 'creme'],
-    'Carnes': ['carne', 'frango', 'peixe', 'linguiça', 'salsicha', 'bacon', 'presunto'],
-    'Bebidas': ['refrigerante', 'suco', 'água', 'cerveja', 'vinho', 'café'],
-    'Limpeza': ['detergente', 'sabão', 'desinfetante', 'alvejante', 'amaciante'],
-    'Higiene': ['shampoo', 'sabonete', 'pasta', 'escova', 'papel higiênico'],
-    'Grãos': ['arroz', 'feijão', 'lentilha', 'grão de bico', 'ervilha'],
-    'Massas': ['macarrão', 'lasanha', 'espaguete', 'penne'],
-    'Padaria': ['pão', 'bolo', 'biscoito', 'bolacha'],
-    'Hortifruti': ['banana', 'maçã', 'laranja', 'tomate', 'cebola', 'batata', 'alface'],
-    'Óleos': ['óleo', 'azeite'],
-    'Temperos': ['sal', 'açúcar', 'pimenta', 'alho', 'caldo'],
-  }
-
-  for (const [category, keywords] of Object.entries(categories)) {
-    if (keywords.some(keyword => desc.includes(keyword))) {
-      return category
-    }
-  }
-
-  return 'Outros'
-}
-
-function extractUnit(description: string): string | null {
-  const match = description.match(/(\d+)\s*(ml|l|g|kg|un|pc|pct|cx|lt)\b/i)
-  return match ? `${match[1]}${match[2].toLowerCase()}` : null
-}
 
 async function generatePriceAlerts(items: ExtractedInvoice['items']) {
+  // Obter configurações de notificação dinamicamente
+  const prefsConf = await sql`SELECT alert_threshold, notify_price_increase FROM user_preferences WHERE id = 1`
+  const threshold = prefsConf.length > 0 ? Number(prefsConf[0].alert_threshold) : 15
+  const notifyPriceIncrease = prefsConf.length > 0 ? prefsConf[0].notify_price_increase : true
+
+  if (!notifyPriceIncrease) return;
+
   for (const item of items) {
     const normalizedName = normalizeProductName(item.description)
     
@@ -218,7 +174,7 @@ async function generatePriceAlerts(items: ExtractedInvoice['items']) {
       const currentPrice = item.unit_price
       const variation = ((currentPrice - previousPrice) / previousPrice) * 100
 
-      if (variation > 15) {
+      if (variation > threshold) {
         const productResult = await sql`
           SELECT id FROM products WHERE normalized_name = ${normalizedName} LIMIT 1
         `

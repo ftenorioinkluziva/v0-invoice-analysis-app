@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useSWR from 'swr'
+import { toast } from 'sonner'
 import {
   Settings,
   Bell,
@@ -19,6 +20,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
+import { Input } from '@/components/ui/input'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,14 +44,69 @@ export default function ConfigPage() {
     weeklySummary: false,
   })
 
+  const [deleteConfirmation, setDeleteConfirmation] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const { data: prefs, mutate: mutatePrefs } = useSWR('/api/preferences', fetcher)
   const { data: stats } = useSWR<{
     total_invoices: number
     total_products: number
   }>('/api/analytics', fetcher)
 
+  useEffect(() => {
+    if (prefs) {
+      setPriceAlertThreshold([Number(prefs.alert_threshold || 15)])
+      setNotifications({
+        priceIncrease: prefs.notify_price_increase ?? true,
+        opportunities: prefs.notify_opportunities ?? true,
+        restockReminders: prefs.notify_restock_reminders ?? true,
+        weeklySummary: prefs.notify_weekly_summary ?? false,
+      })
+    }
+  }, [prefs])
+
+  const savePreferences = async (updates: Record<string, any>) => {
+    try {
+      await fetch('/api/preferences', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      })
+      mutatePrefs()
+    } catch (e) {
+      console.error(e)
+      toast.error('Erro ao salvar configuração')
+    }
+  }
+
   const handleExportData = () => {
     // In a real app, this would trigger a CSV export
     alert('Funcionalidade de exportacao sera implementada em breve!')
+  }
+
+  const handleDeleteAll = async () => {
+    if (deleteConfirmation.toLowerCase() !== 'excluir') return
+    
+    setIsDeleting(true)
+    try {
+      const res = await fetch('/api/data', {
+        method: 'DELETE',
+      })
+      
+      if (!res.ok) {
+        throw new Error('Falha ao excluir dados')
+      }
+      
+      toast.success('Todos os dados foram excluídos com sucesso.')
+      setDeleteConfirmation('')
+      // Reload page to clear swr cache and state
+      window.location.reload()
+    } catch (error) {
+      console.error(error)
+      toast.error('Ocorreu um erro ao excluir os dados.')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -113,9 +170,10 @@ export default function ConfigPage() {
             <Switch
               id="price-increase"
               checked={notifications.priceIncrease}
-              onCheckedChange={(checked) =>
+              onCheckedChange={(checked) => {
                 setNotifications((prev) => ({ ...prev, priceIncrease: checked }))
-              }
+                savePreferences({ notify_price_increase: checked })
+              }}
             />
           </div>
 
@@ -126,6 +184,7 @@ export default function ConfigPage() {
             <Slider
               value={priceAlertThreshold}
               onValueChange={setPriceAlertThreshold}
+              onValueCommit={(value) => savePreferences({ alert_threshold: value[0] })}
               max={50}
               min={5}
               step={5}
@@ -143,9 +202,10 @@ export default function ConfigPage() {
             <Switch
               id="opportunities"
               checked={notifications.opportunities}
-              onCheckedChange={(checked) =>
+              onCheckedChange={(checked) => {
                 setNotifications((prev) => ({ ...prev, opportunities: checked }))
-              }
+                savePreferences({ notify_opportunities: checked })
+              }}
             />
           </div>
 
@@ -159,9 +219,10 @@ export default function ConfigPage() {
             <Switch
               id="restock"
               checked={notifications.restockReminders}
-              onCheckedChange={(checked) =>
+              onCheckedChange={(checked) => {
                 setNotifications((prev) => ({ ...prev, restockReminders: checked }))
-              }
+                savePreferences({ notify_restock_reminders: checked })
+              }}
             />
           </div>
 
@@ -175,9 +236,10 @@ export default function ConfigPage() {
             <Switch
               id="weekly"
               checked={notifications.weeklySummary}
-              onCheckedChange={(checked) =>
+              onCheckedChange={(checked) => {
                 setNotifications((prev) => ({ ...prev, weeklySummary: checked }))
-              }
+                savePreferences({ notify_weekly_summary: checked })
+              }}
             />
           </div>
         </CardContent>
@@ -239,15 +301,38 @@ export default function ConfigPage() {
             <AlertDialogContent className="bg-card">
               <AlertDialogHeader>
                 <AlertDialogTitle>Confirmar exclusao</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta acao ira remover permanentemente todas as notas fiscais,
-                  produtos e historico de precos. Esta acao nao pode ser desfeita.
+                <AlertDialogDescription asChild>
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <p>
+                      Esta acao ira remover permanentemente todas as notas fiscais,
+                      produtos e historico de precos. Esta acao nao pode ser desfeita.
+                    </p>
+                    <div className="space-y-2 pt-2">
+                      <Label htmlFor="confirm-delete">
+                        Digite <strong className="text-foreground">excluir</strong> para confirmar:
+                      </Label>
+                      <Input
+                        id="confirm-delete"
+                        value={deleteConfirmation}
+                        onChange={(e) => setDeleteConfirmation(e.target.value)}
+                        placeholder="excluir"
+                        className="border-destructive/50 focus-visible:ring-destructive text-foreground"
+                      />
+                    </div>
+                  </div>
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Excluir tudo
+                <AlertDialogCancel onClick={() => setDeleteConfirmation('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction 
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={deleteConfirmation.toLowerCase() !== 'excluir' || isDeleting}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleDeleteAll();
+                  }}
+                >
+                  {isDeleting ? 'Excluindo...' : 'Excluir tudo'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

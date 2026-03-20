@@ -64,3 +64,13 @@ export type Alert = {
   read: boolean
   created_at: Date
 }
+
+export type UserPreference = {
+  id: number
+  alert_threshold: number
+  notify_price_increase: boolean
+  notify_opportunities: boolean
+  notify_restock_reminders: boolean
+  notify_weekly_summary: boolean
+  updated_at: Date
+}

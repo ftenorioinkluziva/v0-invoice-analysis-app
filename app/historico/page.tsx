@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import {
   Search,
@@ -47,14 +47,22 @@ type Product = {
 
 export default function HistoricoPage() {
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
 
   const { data: productsData, error: productsError, mutate: mutateProducts } = useSWR<{
     products: Product[]
     categories: string[]
   }>(
-    `/api/products?search=${encodeURIComponent(searchQuery)}&category=${encodeURIComponent(
+    `/api/products?search=${encodeURIComponent(debouncedSearchQuery)}&category=${encodeURIComponent(
       selectedCategory
     )}`,
     fetcher

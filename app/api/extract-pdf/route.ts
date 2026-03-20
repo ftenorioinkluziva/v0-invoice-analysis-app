@@ -46,7 +46,7 @@ Todos os valores monetários devem estar em BRL (reais).`,
             {
               type: 'file',
               data: base64,
-              mediaType: 'application/pdf',
+              mediaType: file.type,
               filename: file.name,
             },
           ],

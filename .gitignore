@@ -45,7 +45,7 @@ Thumbs.db
 *.swp
 
 # AIOX Local (AIOX)
-.aiox-core/local/
+.aiox-core/
 .claude/settings.local.json
 .aiox/install-log.txt
 
@@ -54,3 +54,11 @@ Thumbs.db
 .agent/
 .codex/
 .gemini/
+.cursor/
+.github/
+
+# TypeScript Build Cache
+tsconfig.tsbuildinfo
+# Playwright/Test Artifacts
+playwright-report/
+test-results/
