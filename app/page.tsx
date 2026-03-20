@@ -65,6 +65,9 @@ export default function HomePage() {
         </Button>
       </header>
 
+      {/* Upload — primary action */}
+      <PdfUpload onSuccess={handleUploadSuccess} />
+
       {/* Error state */}
       {(statsError || invoicesError) && (
         <ErrorState
@@ -75,9 +78,6 @@ export default function HomePage() {
 
       {/* Stats */}
       <StatsCards stats={stats ?? null} isLoading={statsLoading} />
-
-      {/* Upload */}
-      <PdfUpload onSuccess={handleUploadSuccess} />
 
       {/* Spending Chart */}
       <SpendingChart

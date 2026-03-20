@@ -19,7 +19,7 @@ test.describe('Historico de Precos', () => {
 
     const hasProducts = await page.locator('[class*="cursor-pointer"]').count()
     if (hasProducts === 0) {
-      await expect(page.getByText(/nenhum produto|adicione notas/i)).toBeVisible()
+      await expect(page.getByText(/nenhum produto|adicione notas/i).first()).toBeVisible()
     }
   })
 })

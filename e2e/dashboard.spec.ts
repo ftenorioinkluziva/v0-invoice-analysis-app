@@ -11,8 +11,9 @@ test.describe('Dashboard', () => {
   test('should display stats cards section', async ({ page }) => {
     await page.goto('/')
 
-    await expect(page.getByText('Total Gasto')).toBeVisible()
-    await expect(page.getByText('Notas Fiscais')).toBeVisible()
+    await expect(page.getByText('Inflação', { exact: true })).toBeVisible()
+    await expect(page.getByText('Notas', { exact: true })).toBeVisible()
+    await expect(page.getByText('Produtos', { exact: true })).toBeVisible()
   })
 
   test('should display the PDF upload area', async ({ page }) => {

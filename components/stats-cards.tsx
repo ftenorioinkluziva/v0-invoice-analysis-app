@@ -32,15 +32,7 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
             <div className="h-20 rounded bg-secondary/50" />
           </CardContent>
         </Card>
-        <div className="grid grid-cols-2 gap-3">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i} className="animate-pulse bg-card">
-              <CardContent className="p-3">
-                <div className="h-16 rounded bg-secondary/50" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <div className="h-10 animate-pulse rounded-xl bg-card" />
       </div>
     )
   }
@@ -84,77 +76,45 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
         </CardContent>
       </Card>
 
-      {/* Secondary stats grid */}
-      <div className="grid grid-cols-2 gap-3">
-        <Card className="bg-card">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-primary/10 p-2">
-                <TrendingUp className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Inflacao Pessoal</p>
-                <p
-                  className={`font-mono text-lg font-semibold ${
-                    stats.personal_inflation > 0 ? 'text-destructive' : 'text-success'
-                  }`}
-                >
-                  {formatPercent(stats.personal_inflation)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Secondary stats — compact row */}
+      <div className="grid grid-cols-4 divide-x divide-border overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-col items-center gap-0.5 px-2 py-2.5">
+          <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+          <p
+            className={`font-mono text-sm font-semibold leading-none ${
+              stats.personal_inflation > 0 ? 'text-destructive' : 'text-success'
+            }`}
+          >
+            {formatPercent(stats.personal_inflation)}
+          </p>
+          <p className="text-[10px] text-muted-foreground">Inflação</p>
+        </div>
 
-        <Card className="bg-card">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-chart-3/10 p-2">
-                <Receipt className="h-4 w-4 text-chart-3" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Notas</p>
-                <p className="font-mono text-lg font-semibold text-foreground">
-                  {stats.total_invoices}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center gap-0.5 px-2 py-2.5">
+          <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+          <p className="font-mono text-sm font-semibold leading-none text-foreground">
+            {stats.total_invoices}
+          </p>
+          <p className="text-[10px] text-muted-foreground">Notas</p>
+        </div>
 
-        <Card className="bg-card">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-chart-4/10 p-2">
-                <Package className="h-4 w-4 text-chart-4" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Produtos</p>
-                <p className="font-mono text-lg font-semibold text-foreground">
-                  {stats.total_products}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center gap-0.5 px-2 py-2.5">
+          <Package className="h-3.5 w-3.5 text-muted-foreground" />
+          <p className="font-mono text-sm font-semibold leading-none text-foreground">
+            {stats.total_products}
+          </p>
+          <p className="text-[10px] text-muted-foreground">Produtos</p>
+        </div>
 
-        <Card className="bg-card">
-          <CardContent className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-chart-5/10 p-2">
-                <TrendingDown className="h-4 w-4 text-chart-5" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Economia</p>
-                <p className="font-mono text-lg font-semibold text-success">
-                  {stats.month_variation_percent < 0
-                    ? formatCurrency(Math.abs(stats.total_spent_month - stats.total_spent_last_month))
-                    : formatCurrency(0)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center gap-0.5 px-2 py-2.5">
+          <TrendingDown className="h-3.5 w-3.5 text-muted-foreground" />
+          <p className="font-mono text-sm font-semibold leading-none text-success">
+            {stats.month_variation_percent < 0
+              ? formatCurrency(Math.abs(stats.total_spent_month - stats.total_spent_last_month))
+              : '—'}
+          </p>
+          <p className="text-[10px] text-muted-foreground">Economia</p>
+        </div>
       </div>
     </div>
   )

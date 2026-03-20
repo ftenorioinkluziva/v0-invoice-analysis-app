@@ -13,7 +13,6 @@ import {
   ChevronRight,
   Receipt,
   Package,
-  FileText,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
@@ -79,9 +78,89 @@ export default function ConfigPage() {
     }
   }
 
-  const handleExportData = () => {
-    // In a real app, this would trigger a CSV export
-    alert('Funcionalidade de exportacao sera implementada em breve!')
+  const escapeCsv = (value: string | number | null | undefined) => {
+    if (value === null || value === undefined) return ''
+
+    const stringValue = String(value)
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`
+    }
+
+    return stringValue
+  }
+
+  const handleExportData = async () => {
+    try {
+      const response = await fetch('/api/invoices')
+
+      if (!response.ok) {
+        throw new Error('Falha ao buscar dados para exportação')
+      }
+
+      const payload = (await response.json()) as {
+        invoices?: Array<{
+          id: number
+          invoice_number: string | null
+          purchase_date: string
+          total_amount: number
+          pdf_filename: string
+          processed_at: string
+          store_name: string | null
+          store_cnpj: string | null
+          item_count: number
+        }>
+      }
+
+      const invoices = payload.invoices ?? []
+
+      if (invoices.length === 0) {
+        toast.info('Nenhum dado disponível para exportar.')
+        return
+      }
+
+      const headers = [
+        'id',
+        'numero_nota',
+        'data_compra',
+        'valor_total',
+        'arquivo_pdf',
+        'processado_em',
+        'estabelecimento',
+        'cnpj_estabelecimento',
+        'quantidade_itens',
+      ]
+
+      const rows = invoices.map((invoice) => [
+        escapeCsv(invoice.id),
+        escapeCsv(invoice.invoice_number),
+        escapeCsv(invoice.purchase_date),
+        escapeCsv(invoice.total_amount),
+        escapeCsv(invoice.pdf_filename),
+        escapeCsv(invoice.processed_at),
+        escapeCsv(invoice.store_name),
+        escapeCsv(invoice.store_cnpj),
+        escapeCsv(invoice.item_count),
+      ])
+
+      const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\n')
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      const date = new Date().toISOString().slice(0, 10)
+
+      anchor.href = url
+      anchor.download = `notewise-export-${date}.csv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      document.body.removeChild(anchor)
+      URL.revokeObjectURL(url)
+
+      toast.success('Exportação concluída com sucesso.')
+    } catch (error) {
+      console.error(error)
+      toast.error('Erro ao exportar os dados em CSV.')
+    }
   }
 
   const handleDeleteAll = async () => {
@@ -120,14 +199,14 @@ export default function ConfigPage() {
       <Card className="bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Database className="h-4 w-4 text-primary" />
+            <Database className="h-4 w-4 text-muted-foreground" />
             Dados Armazenados
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg bg-secondary/50 p-3 text-center">
-              <Receipt className="mx-auto h-5 w-5 text-primary" />
+              <Receipt className="mx-auto h-5 w-5 text-muted-foreground" />
               <p className="mt-1 font-mono text-lg font-semibold">
                 {stats?.total_invoices || 0}
               </p>
@@ -140,13 +219,6 @@ export default function ConfigPage() {
               </p>
               <p className="text-xs text-muted-foreground">Produtos</p>
             </div>
-            <div className="rounded-lg bg-secondary/50 p-3 text-center">
-              <FileText className="mx-auto h-5 w-5 text-chart-4" />
-              <p className="mt-1 font-mono text-lg font-semibold">
-                {stats?.total_invoices || 0}
-              </p>
-              <p className="text-xs text-muted-foreground">PDFs</p>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -155,7 +227,7 @@ export default function ConfigPage() {
       <Card className="bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Bell className="h-4 w-4 text-primary" />
+            <Bell className="h-4 w-4 text-muted-foreground" />
             Notificacoes
           </CardTitle>
         </CardHeader>
@@ -249,7 +321,7 @@ export default function ConfigPage() {
       <Card className="bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Palette className="h-4 w-4 text-primary" />
+            <Palette className="h-4 w-4 text-muted-foreground" />
             Aparencia
           </CardTitle>
         </CardHeader>
@@ -257,9 +329,11 @@ export default function ConfigPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium">Tema escuro</p>
-              <p className="text-xs text-muted-foreground">Sempre ativo</p>
+              <p className="text-xs text-muted-foreground">
+                O NoteWise utiliza sempre o tema escuro
+              </p>
             </div>
-            <Switch checked disabled />
+            <span className="text-xs text-muted-foreground">Sempre ativo</span>
           </div>
         </CardContent>
       </Card>
@@ -268,7 +342,7 @@ export default function ConfigPage() {
       <Card className="bg-card">
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
-            <Settings className="h-4 w-4 text-primary" />
+            <Settings className="h-4 w-4 text-muted-foreground" />
             Gerenciar Dados
           </CardTitle>
         </CardHeader>

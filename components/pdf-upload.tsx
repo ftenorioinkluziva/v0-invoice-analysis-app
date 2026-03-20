@@ -158,7 +158,7 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
                 <div className="text-center">
                   <p className="font-medium text-foreground">Upload de Nota Fiscal</p>
                   <p className="text-sm text-muted-foreground">
-                    Arraste um PDF ou toque para selecionar
+                    Arraste um PDF/Imagem ou toque para selecionar
                   </p>
                 </div>
               </>

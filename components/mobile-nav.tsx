@@ -33,7 +33,7 @@ export function MobileNav() {
               )}
             >
               <Icon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 2} />
-              <span className="text-[10px] font-medium">{label}</span>
+              <span className="text-xs font-medium">{label}</span>
             </Link>
           )
         })}

@@ -91,6 +91,8 @@ export default function ListaPage() {
   }, [searchQuery])
   const [showFinishDialog, setShowFinishDialog] = useState(false)
   const [isFinishing, setIsFinishing] = useState(false)
+  const [showCustomInput, setShowCustomInput] = useState(false)
+  const [customItemQuery, setCustomItemQuery] = useState('')
 
   const { data: listsData, error: listsError, mutate: mutateLists } = useSWR<{ lists: ShoppingList[] }>(
     '/api/shopping-lists',
@@ -392,17 +394,12 @@ export default function ListaPage() {
         <ErrorState message="Erro ao carregar lista" onRetry={() => mutateDetails()} />
       )}
 
-      {/* Search and add products */}
+      {/* Search catalog */}
       <div className="relative">
         <Input
-          placeholder="Buscar ou digitar item avulso..."
+          placeholder="Buscar produto no catálogo..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter' || !searchQuery.trim()) return
-            const hasProducts = productsData?.products && productsData.products.length > 0
-            if (!hasProducts) handleAddCustomItem(searchQuery)
-          }}
           className="bg-secondary/50"
         />
         {searchQuery && (
@@ -422,21 +419,58 @@ export default function ListaPage() {
                     <Plus className="h-4 w-4 text-primary" />
                   </button>
                 ))}
-                <button
-                  className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border p-2 text-left transition-colors hover:bg-secondary/50"
-                  onClick={() => handleAddCustomItem(searchQuery)}
-                >
-                  <Plus className="h-4 w-4 text-primary" />
-                  <div>
-                    <p className="text-sm font-medium">Adicionar &quot;{searchQuery.trim()}&quot;</p>
-                    <p className="text-xs text-muted-foreground">Item avulso (sem histórico)</p>
-                  </div>
-                </button>
+                {(!productsData?.products || productsData.products.length === 0) && (
+                  <p className="px-2 py-3 text-center text-sm text-muted-foreground">
+                    Nenhum produto encontrado no catálogo
+                  </p>
+                )}
               </div>
             </ScrollArea>
           </Card>
         )}
       </div>
+
+      {/* Custom item input */}
+      {showCustomInput ? (
+        <div className="flex gap-2">
+          <Input
+            autoFocus
+            placeholder="Nome do item avulso..."
+            value={customItemQuery}
+            onChange={(e) => setCustomItemQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return
+              handleAddCustomItem(customItemQuery)
+              setCustomItemQuery('')
+              setShowCustomInput(false)
+            }}
+            className="bg-secondary/50"
+          />
+          <Button
+            size="sm"
+            onClick={() => {
+              handleAddCustomItem(customItemQuery)
+              setCustomItemQuery('')
+              setShowCustomInput(false)
+            }}
+          >
+            Adicionar
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => { setShowCustomInput(false); setCustomItemQuery('') }}>
+            Cancelar
+          </Button>
+        </div>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full border-dashed text-muted-foreground"
+          onClick={() => setShowCustomInput(true)}
+        >
+          <Plus className="mr-1.5 h-4 w-4" />
+          Item avulso (sem histórico)
+        </Button>
+      )}
 
       {/* Suggestions */}
       {listDetails?.suggestions && listDetails.suggestions.length > 0 && (
@@ -593,12 +627,6 @@ export default function ListaPage() {
       {/* Finish shopping button */}
       {(listDetails?.items?.length || customItems.length > 0) && listDetails?.list.status !== 'completed' && (
         <Dialog open={showFinishDialog} onOpenChange={setShowFinishDialog}>
-          <DialogTrigger asChild>
-            <Button className="mt-2" size="lg">
-              <Check className="mr-2 h-4 w-4" />
-              Finalizar Compras
-            </Button>
-          </DialogTrigger>
           <DialogContent className="bg-card">
             <DialogHeader>
               <DialogTitle>Finalizar Compras</DialogTitle>
@@ -617,6 +645,22 @@ export default function ListaPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Sticky footer — total + CTA */}
+      {listDetails?.list.status !== 'completed' && (listDetails?.items?.length || customItems.length > 0) ? (
+        <div className="fixed bottom-20 left-1/2 w-full max-w-lg -translate-x-1/2 px-4 pb-safe">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur-sm">
+            <div>
+              <p className="text-xs text-muted-foreground">Total estimado</p>
+              <p className="font-mono text-base font-bold text-foreground">{formatCurrency(estimatedTotal)}</p>
+            </div>
+            <Button size="sm" onClick={() => setShowFinishDialog(true)}>
+              <Check className="mr-1.5 h-4 w-4" />
+              Finalizar
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

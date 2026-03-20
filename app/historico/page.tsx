@@ -49,6 +49,7 @@ export default function HistoricoPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string>('')
+  const [quickFilter, setQuickFilter] = useState<'all' | 'expensive' | 'frequent'>('all')
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -72,6 +73,22 @@ export default function HistoricoPage() {
     selectedProductId ? `/api/products/${selectedProductId}` : null,
     fetcher
   )
+
+  const displayedProducts = (() => {
+    const list = productsData?.products ?? []
+
+    if (quickFilter === 'expensive') {
+      return [...list].sort((firstProduct, secondProduct) => secondProduct.avg_price - firstProduct.avg_price)
+    }
+
+    if (quickFilter === 'frequent') {
+      return [...list].sort(
+        (firstProduct, secondProduct) => secondProduct.purchase_count - firstProduct.purchase_count
+      )
+    }
+
+    return list
+  })()
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -173,7 +190,7 @@ export default function HistoricoPage() {
         <Card className="bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
-              <BarChart3 className="h-4 w-4 text-primary" />
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
               Historico de Precos
             </CardTitle>
           </CardHeader>
@@ -241,36 +258,50 @@ export default function HistoricoPage() {
           </CardContent>
         </Card>
 
-        {/* Price by store */}
+        {/* Price by store — summary */}
         <Card className="bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Store className="h-4 w-4 text-primary" />
+              <Store className="h-4 w-4 text-muted-foreground" />
               Precos por Estabelecimento
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {productHistory.prices.slice(0, 10).map((price, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between gap-3 rounded-lg bg-secondary/30 p-2.5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{price.raw_description}</p>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Store className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{price.store_name}</span>
-                      <span>·</span>
-                      <span className="shrink-0">{formatDate(price.date)}</span>
-                    </div>
+          <CardContent className="space-y-3">
+            {Object.values(
+              productHistory.prices.reduce<
+                Record<string, { store: string; min: number; max: number; sum: number; count: number }>
+              >((acc, p) => {
+                const key = p.store_name
+                if (!acc[key]) {
+                  acc[key] = { store: p.store_name, min: p.price, max: p.price, sum: p.price, count: 1 }
+                } else {
+                  acc[key].min = Math.min(acc[key].min, p.price)
+                  acc[key].max = Math.max(acc[key].max, p.price)
+                  acc[key].sum += p.price
+                  acc[key].count += 1
+                }
+                return acc
+              }, {})
+            ).map((row) => (
+              <div key={row.store} className="rounded-lg bg-secondary/30 p-3">
+                <p className="truncate text-sm font-medium">{row.store}</p>
+                <div className="mt-1.5 grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <p className="font-mono text-sm font-semibold text-success">{formatCurrency(row.min)}</p>
+                    <p className="text-[10px] text-muted-foreground">Mínimo</p>
                   </div>
-                  <span className="shrink-0 font-mono text-sm font-semibold">
-                    {formatCurrency(price.price)}
-                  </span>
+                  <div>
+                    <p className="font-mono text-sm font-semibold text-foreground">{formatCurrency(row.sum / row.count)}</p>
+                    <p className="text-[10px] text-muted-foreground">Média</p>
+                  </div>
+                  <div>
+                    <p className="font-mono text-sm font-semibold text-destructive">{formatCurrency(row.max)}</p>
+                    <p className="text-[10px] text-muted-foreground">Máximo</p>
+                  </div>
                 </div>
-              ))}
-            </div>
+                <p className="mt-1 text-right text-[10px] text-muted-foreground">{row.count} compra{row.count !== 1 ? 's' : ''}</p>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>
@@ -313,13 +344,49 @@ export default function HistoricoPage() {
         </Select>
       </div>
 
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        <button
+          onClick={() => setQuickFilter('all')}
+          className={cn(
+            'shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+            quickFilter === 'all'
+              ? 'bg-secondary text-foreground'
+              : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
+          )}
+        >
+          Todos
+        </button>
+        <button
+          onClick={() => setQuickFilter('expensive')}
+          className={cn(
+            'shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+            quickFilter === 'expensive'
+              ? 'bg-secondary text-foreground'
+              : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
+          )}
+        >
+          Mais caros
+        </button>
+        <button
+          onClick={() => setQuickFilter('frequent')}
+          className={cn(
+            'shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+            quickFilter === 'frequent'
+              ? 'bg-secondary text-foreground'
+              : 'bg-secondary/50 text-muted-foreground hover:bg-secondary'
+          )}
+        >
+          Mais comprados
+        </button>
+      </div>
+
       {/* Products list */}
       <ScrollArea className="flex-1">
         {productsError ? (
           <ErrorState message="Erro ao carregar produtos" onRetry={() => mutateProducts()} />
-        ) : productsData?.products && productsData.products.length > 0 ? (
+        ) : displayedProducts.length > 0 ? (
           <div className="space-y-2">
-            {productsData.products.map((product) => (
+            {displayedProducts.map((product) => (
               <Card
                 key={product.id}
                 className="cursor-pointer bg-card transition-colors hover:bg-secondary/50"
@@ -335,7 +402,7 @@ export default function HistoricoPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-sm font-semibold text-primary">
+                    <span className="font-mono text-sm font-semibold text-foreground">
                       {formatCurrency(product.avg_price)}
                     </span>
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
