@@ -63,3 +63,6 @@ tsconfig.tsbuildinfo
 playwright-report/
 test-results/
 notewise-*.png
+
+# Local notes
+docs/todo.md
