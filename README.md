@@ -24,6 +24,35 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Testing
+
+### Unit tests
+
+```bash
+npm test
+```
+
+### E2E tests (Playwright)
+
+```bash
+npm run test:e2e
+```
+
+Protected routes are covered in two modes:
+
+- **Without credentials**: tests validate redirect to `/sign-in` for unauthenticated users.
+- **With credentials**: tests run authenticated using Playwright `storageState`.
+
+Set these environment variables to enable authenticated E2E runs:
+
+```bash
+E2E_EMAIL="your-user@example.com"
+E2E_PASSWORD="your-password"
+```
+
+On authenticated runs, Playwright executes `e2e/auth.setup.ts` once and reuses
+the generated session state from `e2e/.auth/user.json`.
+
 ## Learn More
 
 To learn more, take a look at the following resources:

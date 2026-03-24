@@ -2,6 +2,83 @@ import { generateText, Output } from 'ai'
 import { google } from '@ai-sdk/google'
 import { ExtractedInvoiceSchema } from '@/lib/types'
 
+type ExtractPdfError = {
+  statusCode: number
+  code: string
+  message: string
+  logMessage: string
+}
+
+const getExtractPdfError = (error: unknown): ExtractPdfError => {
+  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    return {
+      statusCode: 500,
+      code: 'AI_CONFIG_MISSING',
+      message:
+        'A extração está temporariamente indisponível por configuração do serviço de IA. Tente novamente mais tarde.',
+      logMessage: 'GOOGLE_GENERATIVE_AI_API_KEY is not configured',
+    }
+  }
+
+  if (!(error instanceof Error)) {
+    return {
+      statusCode: 500,
+      code: 'EXTRACT_UNKNOWN_ERROR',
+      message: 'Não foi possível processar o arquivo agora. Tente novamente em instantes.',
+      logMessage: 'Unknown non-Error thrown',
+    }
+  }
+
+  const candidate = error as Error & {
+    statusCode?: number
+    responseBody?: string
+  }
+
+  const statusCode = candidate.statusCode
+  const responseBody = candidate.responseBody ?? ''
+  const lowerMessage = error.message.toLowerCase()
+  const lowerResponseBody = responseBody.toLowerCase()
+
+  if (
+    statusCode === 403 &&
+    (lowerMessage.includes('reported as leaked') || lowerResponseBody.includes('reported as leaked'))
+  ) {
+    return {
+      statusCode: 503,
+      code: 'AI_KEY_REVOKED',
+      message:
+        'A extração está temporariamente indisponível por manutenção da integração de IA. Tente novamente em alguns minutos.',
+      logMessage: 'AI provider key rejected as leaked/revoked',
+    }
+  }
+
+  if (statusCode === 401 || statusCode === 403) {
+    return {
+      statusCode: 503,
+      code: 'AI_AUTH_ERROR',
+      message:
+        'A extração está temporariamente indisponível por autenticação do serviço de IA. Tente novamente mais tarde.',
+      logMessage: `AI provider auth error (${statusCode})`,
+    }
+  }
+
+  if (statusCode === 429) {
+    return {
+      statusCode: 429,
+      code: 'AI_RATE_LIMIT',
+      message: 'Muitas solicitações de extração no momento. Tente novamente em alguns instantes.',
+      logMessage: 'AI provider rate limit',
+    }
+  }
+
+  return {
+    statusCode: 500,
+    code: 'EXTRACT_PROCESSING_ERROR',
+    message: 'Não foi possível extrair os dados da nota agora. Tente novamente em instantes.',
+    logMessage: `Unhandled extraction error: ${error.message}`,
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
@@ -57,7 +134,20 @@ Todos os valores monetários devem estar em BRL (reais).`,
 
     return Response.json({ success: true, data: result.output, filename: file.name })
   } catch (error) {
-    console.error('[extract-pdf] error:', error)
-    return Response.json({ error: 'Failed to extract data from PDF' }, { status: 500 })
+    const mappedError = getExtractPdfError(error)
+
+    console.error('[extract-pdf] error:', {
+      code: mappedError.code,
+      message: mappedError.logMessage,
+      statusCode: mappedError.statusCode,
+    })
+
+    return Response.json(
+      {
+        error: mappedError.message,
+        code: mappedError.code,
+      },
+      { status: mappedError.statusCode }
+    )
   }
 }

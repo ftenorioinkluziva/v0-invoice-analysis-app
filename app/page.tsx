@@ -10,8 +10,7 @@ import { PriceAlerts } from '@/components/price-alerts'
 import { SpendingChart } from '@/components/spending-chart'
 import { RecentInvoices } from '@/components/recent-invoices'
 import { DashboardStats } from '@/lib/types'
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+import { fetchJsonWithAuthRedirect } from '@/lib/client-fetch'
 
 export default function HomePage() {
   const {
@@ -19,7 +18,7 @@ export default function HomePage() {
     isLoading: statsLoading,
     error: statsError,
     mutate: mutateStats,
-  } = useSWR<DashboardStats>('/api/analytics', fetcher)
+  } = useSWR<DashboardStats>('/api/analytics', fetchJsonWithAuthRedirect)
 
   const {
     data: invoicesData,
@@ -34,7 +33,7 @@ export default function HomePage() {
     pdf_filename: string | null
     store_name: string
     item_count: number
-  }> }>('/api/invoices', fetcher)
+  }> }>('/api/invoices', fetchJsonWithAuthRedirect)
 
   const handleRefresh = () => {
     mutateStats()

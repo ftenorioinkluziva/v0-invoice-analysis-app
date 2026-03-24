@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { fetchWithAuthRedirect } from '@/lib/client-fetch'
 import { ExtractedInvoice } from '@/lib/types'
 
 type UploadStatus = 'idle' | 'uploading' | 'extracting' | 'preview' | 'saving' | 'success' | 'error'
@@ -39,7 +40,7 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('/api/extract-pdf', {
+      const response = await fetchWithAuthRedirect('/api/extract-pdf', {
         method: 'POST',
         body: formData,
       })
@@ -86,7 +87,7 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
     setStatus('saving')
 
     try {
-      const response = await fetch('/api/invoices', {
+      const response = await fetchWithAuthRedirect('/api/invoices', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

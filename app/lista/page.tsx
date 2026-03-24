@@ -35,9 +35,8 @@ import {
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ErrorState } from '@/components/error-state'
+import { fetchJsonWithAuthRedirect, fetchWithAuthRedirect } from '@/lib/client-fetch'
 import { cn } from '@/lib/utils'
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 type ShoppingList = {
   id: number
@@ -106,14 +105,14 @@ export default function ListaPage() {
 
   const { data: listsData, error: listsError, mutate: mutateLists } = useSWR<{ lists: ShoppingList[] }>(
     '/api/shopping-lists',
-    fetcher
+    fetchJsonWithAuthRedirect
   )
 
   const { data: listDetails, error: detailsError, mutate: mutateDetails } = useSWR<{
     list: ShoppingList
     items: ListItem[]
     suggestions: Suggestion[]
-  }>(selectedListId ? `/api/shopping-lists/${selectedListId}` : null, fetcher)
+  }>(selectedListId ? `/api/shopping-lists/${selectedListId}` : null, fetchJsonWithAuthRedirect)
 
   const { data: productsData } = useSWR<{
     products: Array<{
@@ -122,7 +121,10 @@ export default function ListaPage() {
       category: string | null
       avg_price: number
     }>
-  }>(debouncedSearchQuery ? `/api/products?search=${encodeURIComponent(debouncedSearchQuery)}` : null, fetcher)
+  }>(
+    debouncedSearchQuery ? `/api/products?search=${encodeURIComponent(debouncedSearchQuery)}` : null,
+    fetchJsonWithAuthRedirect
+  )
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -132,7 +134,7 @@ export default function ListaPage() {
   }
 
   const handleCreateList = async () => {
-    const response = await fetch('/api/shopping-lists', {
+    const response = await fetchWithAuthRedirect('/api/shopping-lists', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newListName || 'Nova Lista' }),
@@ -148,7 +150,7 @@ export default function ListaPage() {
 
   const handleToggleItem = async (itemId: number, checked: boolean) => {
     if (!selectedListId) return
-    await fetch(`/api/shopping-lists/${selectedListId}`, {
+    await fetchWithAuthRedirect(`/api/shopping-lists/${selectedListId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ item_id: itemId, checked }),
@@ -158,7 +160,7 @@ export default function ListaPage() {
 
   const handleAddItem = async (productId: number) => {
     if (!selectedListId) return
-    await fetch(`/api/shopping-lists/${selectedListId}`, {
+    await fetchWithAuthRedirect(`/api/shopping-lists/${selectedListId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ product_id: productId }),
@@ -169,7 +171,7 @@ export default function ListaPage() {
 
   const handleDeleteItem = async (itemId: number) => {
     if (!selectedListId) return
-    await fetch(`/api/shopping-lists/${selectedListId}`, {
+    await fetchWithAuthRedirect(`/api/shopping-lists/${selectedListId}`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ item_id: itemId }),
@@ -216,7 +218,7 @@ export default function ListaPage() {
 
     quantityUpdateTimers.current[itemId] = setTimeout(async () => {
       try {
-        const response = await fetch(`/api/shopping-lists/${selectedListId}`, {
+        const response = await fetchWithAuthRedirect(`/api/shopping-lists/${selectedListId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ item_id: itemId, quantity: newQuantity }),
@@ -238,7 +240,7 @@ export default function ListaPage() {
     if (!selectedListId) return
     setIsFinishing(true)
     try {
-      const res = await fetch(`/api/shopping-lists/${selectedListId}`, {
+      const res = await fetchWithAuthRedirect(`/api/shopping-lists/${selectedListId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'completed' }),

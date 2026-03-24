@@ -13,9 +13,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ErrorState } from '@/components/error-state'
+import { fetchJsonWithAuthRedirect, fetchWithAuthRedirect } from '@/lib/client-fetch'
 import { cn } from '@/lib/utils'
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 type Alert = {
   id: number
@@ -60,7 +59,7 @@ const alertTypeConfig = {
 }
 
 export default function AlertasPage() {
-  const { data, error, mutate } = useSWR<{ alerts: Alert[] }>('/api/alerts', fetcher)
+  const { data, error, mutate } = useSWR<{ alerts: Alert[] }>('/api/alerts', fetchJsonWithAuthRedirect)
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -83,7 +82,7 @@ export default function AlertasPage() {
   }
 
   const handleMarkRead = async (id: number) => {
-    await fetch('/api/alerts', {
+    await fetchWithAuthRedirect('/api/alerts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, read: true }),

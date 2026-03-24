@@ -33,8 +33,7 @@ import {
 import { cn } from '@/lib/utils'
 import { ErrorState } from '@/components/error-state'
 import { ProductPriceHistory } from '@/lib/types'
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+import { fetchJsonWithAuthRedirect } from '@/lib/client-fetch'
 
 type Product = {
   id: number
@@ -66,12 +65,12 @@ export default function HistoricoPage() {
     `/api/products?search=${encodeURIComponent(debouncedSearchQuery)}&category=${encodeURIComponent(
       selectedCategory
     )}`,
-    fetcher
+    fetchJsonWithAuthRedirect
   )
 
   const { data: productHistory } = useSWR<ProductPriceHistory>(
     selectedProductId ? `/api/products/${selectedProductId}` : null,
-    fetcher
+    fetchJsonWithAuthRedirect
   )
 
   const displayedProducts = (() => {

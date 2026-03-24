@@ -31,8 +31,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import { fetchJsonWithAuthRedirect, fetchWithAuthRedirect } from '@/lib/client-fetch'
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+type UserPreferences = {
+  alert_threshold: number
+  notify_price_increase: boolean
+  notify_opportunities: boolean
+  notify_restock_reminders: boolean
+  notify_weekly_summary: boolean
+}
+
+type PreferencesUpdate = Partial<UserPreferences>
 
 export default function ConfigPage() {
   const [priceAlertThreshold, setPriceAlertThreshold] = useState([15])
@@ -46,11 +55,14 @@ export default function ConfigPage() {
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const { data: prefs, mutate: mutatePrefs } = useSWR('/api/preferences', fetcher)
+  const { data: prefs, mutate: mutatePrefs } = useSWR<UserPreferences>(
+    '/api/preferences',
+    fetchJsonWithAuthRedirect
+  )
   const { data: stats } = useSWR<{
     total_invoices: number
     total_products: number
-  }>('/api/analytics', fetcher)
+  }>('/api/analytics', fetchJsonWithAuthRedirect)
 
   useEffect(() => {
     if (prefs) {
@@ -64,9 +76,9 @@ export default function ConfigPage() {
     }
   }, [prefs])
 
-  const savePreferences = async (updates: Record<string, any>) => {
+  const savePreferences = async (updates: PreferencesUpdate) => {
     try {
-      await fetch('/api/preferences', {
+      await fetchWithAuthRedirect('/api/preferences', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
@@ -91,7 +103,7 @@ export default function ConfigPage() {
 
   const handleExportData = async () => {
     try {
-      const response = await fetch('/api/invoices')
+      const response = await fetchWithAuthRedirect('/api/invoices')
 
       if (!response.ok) {
         throw new Error('Falha ao buscar dados para exportação')
@@ -168,7 +180,7 @@ export default function ConfigPage() {
     
     setIsDeleting(true)
     try {
-      const res = await fetch('/api/data', {
+      const res = await fetchWithAuthRedirect('/api/data', {
         method: 'DELETE',
       })
       

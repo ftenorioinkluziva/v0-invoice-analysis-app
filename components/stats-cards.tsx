@@ -10,18 +10,23 @@ type StatsCardsProps = {
 }
 
 export function StatsCards({ stats, isLoading }: StatsCardsProps) {
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number | null | undefined) => {
+    const safeValue = Number(value ?? 0)
+
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(value)
+    }).format(Number.isFinite(safeValue) ? safeValue : 0)
   }
 
-  const formatPercent = (value: number) => {
-    const sign = value > 0 ? '+' : ''
-    return `${sign}${value.toFixed(1)}%`
+  const formatPercent = (value: number | null | undefined) => {
+    const safeValue = Number(value ?? 0)
+    const normalizedValue = Number.isFinite(safeValue) ? safeValue : 0
+    const sign = normalizedValue > 0 ? '+' : ''
+
+    return `${sign}${normalizedValue.toFixed(1)}%`
   }
 
   if (isLoading || !stats) {
