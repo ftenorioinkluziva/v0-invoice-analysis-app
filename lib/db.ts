@@ -16,7 +16,43 @@ export type Product = {
   category: string | null
   brand: string | null
   unit: string | null
+  comparable_group_id: number | null
   created_at: Date
+}
+
+export type ProductGroup = {
+  id: number
+  user_id: string
+  display_name: string
+  base_unit: 'kg' | 'L'
+  created_at: Date
+  updated_at: Date
+}
+
+export type ProductGroupMembershipEvent = {
+  id: number
+  product_id: number
+  group_id: number
+  user_id: string
+  event_type: 'associate' | 'disassociate'
+  changed_by: string
+  created_at: Date
+}
+
+export type ProductGroupSuggestion = {
+  id: number
+  user_id: string
+  source_product_id: number
+  target_group_id: number
+  confidence: number
+  reasons: string[]
+  status: 'pending' | 'accepted' | 'rejected' | 'superseded'
+  signals_snapshot: Record<string, unknown>
+  decision_at: Date | null
+  changed_by: string
+  change_origin: 'heuristic' | 'recompute' | 'accept' | 'reject'
+  created_at: Date
+  updated_at: Date
 }
 
 export type Invoice = {
@@ -37,6 +73,11 @@ export type InvoiceItem = {
   quantity: number
   unit_price: number
   total_price: number
+  comparable_base_unit: 'kg' | 'L' | null
+  comparable_quantity_base: number | null
+  comparable_unit_price: number | null
+  measurement_source: 'description' | 'scale_item' | 'rule_inference' | null
+  measurement_confidence: number | null
 }
 
 export type ShoppingList = {

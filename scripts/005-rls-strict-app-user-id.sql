@@ -58,3 +58,26 @@ DROP POLICY IF EXISTS user_preferences_user_isolation ON user_preferences;
 CREATE POLICY user_preferences_user_isolation ON user_preferences
   USING (user_id = app.current_app_user_id())
   WITH CHECK (user_id = app.current_app_user_id());
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'product_groups') THEN
+    ALTER TABLE product_groups ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS product_groups_user_isolation ON product_groups;
+    EXECUTE '
+      CREATE POLICY product_groups_user_isolation ON product_groups
+        USING (user_id = app.current_app_user_id())
+        WITH CHECK (user_id = app.current_app_user_id())
+    ';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'product_group_membership_events') THEN
+    ALTER TABLE product_group_membership_events ENABLE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS product_group_membership_events_user_isolation ON product_group_membership_events;
+    EXECUTE '
+      CREATE POLICY product_group_membership_events_user_isolation ON product_group_membership_events
+        USING (user_id = app.current_app_user_id())
+        WITH CHECK (user_id = app.current_app_user_id())
+    ';
+  END IF;
+END $$;

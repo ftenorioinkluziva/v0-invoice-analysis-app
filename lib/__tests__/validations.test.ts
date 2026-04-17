@@ -6,6 +6,12 @@ import {
   UpdateListItemSchema,
   DeleteListItemSchema,
   UpdateAlertSchema,
+  CreateProductGroupSchema,
+  UpdateProductGroupSchema,
+  UpdateProductSchema,
+  AssignProductGroupSchema,
+  ProductGroupSuggestionResponseSchema,
+  parseHistoryPeriodDaysParam,
 } from '../validations'
 
 describe('SaveInvoiceSchema', () => {
@@ -180,6 +186,73 @@ describe('UpdateAlertSchema', () => {
 
   it('should reject non-boolean read', () => {
     const result = UpdateAlertSchema.safeParse({ id: 1, read: 'yes' })
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('Comparable catalog schemas', () => {
+  it('should accept a valid product group creation payload', () => {
+    const result = CreateProductGroupSchema.safeParse({
+      display_name: 'Leites',
+      base_unit: 'L',
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('should reject invalid comparable base units', () => {
+    const result = CreateProductGroupSchema.safeParse({
+      display_name: 'Leites',
+      base_unit: 'un',
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  it('should accept product group rename payloads', () => {
+    const result = UpdateProductGroupSchema.safeParse({ display_name: 'Laticinios' })
+    expect(result.success).toBe(true)
+  })
+
+  it('should accept product brand updates with nullable brand', () => {
+    expect(UpdateProductSchema.safeParse({ brand: 'Marca Boa' }).success).toBe(true)
+    expect(UpdateProductSchema.safeParse({ brand: null }).success).toBe(true)
+  })
+
+  it('should accept group assignment override flag', () => {
+    const result = AssignProductGroupSchema.safeParse({
+      group_id: 5,
+      allow_missing_comparable_evidence: true,
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('should validate the product group suggestion response contract', () => {
+    const result = ProductGroupSuggestionResponseSchema.safeParse({
+      id: 1,
+      source_product_id: 7,
+      target_group_id: 3,
+      confidence: 0.812,
+      reasons: ['Categoria igual'],
+      status: 'pending',
+    })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('should default period_days to 90 when omitted', () => {
+    const result = parseHistoryPeriodDaysParam(null)
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBe(90)
+    }
+  })
+
+  it('should reject unsupported period_days values', () => {
+    const result = parseHistoryPeriodDaysParam('7')
+
     expect(result.success).toBe(false)
   })
 })

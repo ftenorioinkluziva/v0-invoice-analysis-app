@@ -1,5 +1,8 @@
 import { z } from 'zod'
 
+export const ComparableBaseUnitSchema = z.enum(['kg', 'L'])
+export const MeasurementSourceSchema = z.enum(['description', 'scale_item', 'rule_inference'])
+
 export const InvoiceItemSchema = z.object({
   description: z.string().describe('Product description as shown on invoice'),
   quantity: z.number().describe('Quantity purchased'),
@@ -19,6 +22,25 @@ export const ExtractedInvoiceSchema = z.object({
 
 export type ExtractedInvoice = z.infer<typeof ExtractedInvoiceSchema>
 export type ExtractedInvoiceItem = z.infer<typeof InvoiceItemSchema>
+export type ComparableBaseUnit = z.infer<typeof ComparableBaseUnitSchema>
+export type MeasurementSource = z.infer<typeof MeasurementSourceSchema>
+
+export type ComparableMeasurement = {
+  original_quantity: number | null
+  original_unit: 'g' | 'kg' | 'ml' | 'L' | null
+  comparable_base_unit: ComparableBaseUnit | null
+  comparable_quantity_base: number | null
+  measurement_source: MeasurementSource
+  measurement_confidence: number
+  is_comparable: boolean
+  is_scale_item: boolean
+}
+
+export type ComparablePricing = ComparableMeasurement & {
+  comparable_unit_price: number | null
+}
+
+export type NormalizedInvoiceItem = ExtractedInvoiceItem & ComparablePricing
 
 export type DashboardStats = {
   total_spent_month: number
@@ -55,4 +77,36 @@ export type ProductPriceHistory = {
     max_price: number
     price_variation_6m: number
   }
+}
+
+export type ComparableGroupSummary = {
+  id: number
+  display_name: string
+  base_unit: ComparableBaseUnit
+  min_unit_price: number
+  avg_unit_price: number
+  max_unit_price: number
+}
+
+export type ComparableGroupHistory = {
+  id: number
+  display_name: string
+  base_unit: ComparableBaseUnit
+  members: {
+    product_id: number
+    product_label: string
+    brand: string | null
+  }[]
+  aggregates: {
+    min_unit_price: number
+    avg_unit_price: number
+    max_unit_price: number
+  }
+  recent_items: {
+    invoice_item_id: number
+    purchase_date: string
+    comparable_unit_price: number
+    product_id: number
+    product_label: string
+  }[]
 }

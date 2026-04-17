@@ -36,6 +36,12 @@ import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ErrorState } from '@/components/error-state'
 import { fetchJsonWithAuthRedirect, fetchWithAuthRedirect } from '@/lib/client-fetch'
+import {
+  getShoppingListItemComparableContext,
+  getShoppingListItemTotal,
+  getShoppingListItemUnitPrice,
+  type ShoppingListDetailItem,
+} from '@/lib/shopping-list'
 import { cn } from '@/lib/utils'
 
 type ShoppingList = {
@@ -46,18 +52,6 @@ type ShoppingList = {
   item_count: number
   checked_count: number
   estimated_total: number
-}
-
-type ListItem = {
-  id: number
-  quantity: number
-  checked: boolean
-  estimated_price: number
-  product_id: number
-  normalized_name: string
-  category: string | null
-  last_price: number
-  price_variation: number
 }
 
 type Suggestion = {
@@ -110,7 +104,7 @@ export default function ListaPage() {
 
   const { data: listDetails, error: detailsError, mutate: mutateDetails } = useSWR<{
     list: ShoppingList
-    items: ListItem[]
+    items: ShoppingListDetailItem[]
     suggestions: Suggestion[]
   }>(selectedListId ? `/api/shopping-lists/${selectedListId}` : null, fetchJsonWithAuthRedirect)
 
@@ -131,6 +125,19 @@ export default function ListaPage() {
       style: 'currency',
       currency: 'BRL',
     }).format(value)
+  }
+
+  const formatItemUnitPrice = (item: ShoppingListDetailItem) => {
+    const unitPrice = getShoppingListItemUnitPrice(item)
+    return unitPrice === null ? 'Sem preco' : `${formatCurrency(unitPrice)} ${UNIT_PRICE_SUFFIX}`
+  }
+
+  const formatComparableReference = (item: ShoppingListDetailItem) => {
+    if (item.comparable_unit_price === null || !item.comparable_base_unit) {
+      return null
+    }
+
+    return `${formatCurrency(item.comparable_unit_price)}/${item.comparable_base_unit}`
   }
 
   const handleCreateList = async () => {
@@ -265,13 +272,10 @@ export default function ListaPage() {
     if (!acc[category]) acc[category] = []
     acc[category].push(item)
     return acc
-  }, {} as Record<string, ListItem[]>)
+  }, {} as Record<string, ShoppingListDetailItem[]>)
 
   const estimatedTotal =
-    listDetails?.items.reduce(
-      (sum, item) => sum + (item.last_price || item.estimated_price || 0) * item.quantity,
-      0
-    ) || 0
+    listDetails?.items.reduce((sum, item) => sum + getShoppingListItemTotal(item), 0) || 0
 
   const activeLists = listsData?.lists?.filter((l) => l.status === 'active') || []
   const completedLists = listsData?.lists?.filter((l) => l.status === 'completed') || []
@@ -604,7 +608,7 @@ export default function ListaPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground">
-                            {formatCurrency(item.last_price || item.estimated_price || 0)} {UNIT_PRICE_SUFFIX}
+                            {formatItemUnitPrice(item)}
                           </span>
                           {item.price_variation !== 0 && (
                             <span
@@ -624,10 +628,17 @@ export default function ListaPage() {
                             </span>
                           )}
                         </div>
+                        {formatComparableReference(item) && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {[getShoppingListItemComparableContext(item), formatComparableReference(item)]
+                              .filter(Boolean)
+                              .join(' • ')}
+                          </p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-sm font-medium">
-                          {formatCurrency((item.last_price || 0) * item.quantity)}
+                          {formatCurrency(getShoppingListItemTotal(item))}
                         </span>
                         <Button
                           variant="ghost"
