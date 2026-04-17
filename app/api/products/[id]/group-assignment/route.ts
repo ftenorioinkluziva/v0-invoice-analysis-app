@@ -1,4 +1,5 @@
-import { Pool, PoolClient } from '@neondatabase/serverless'
+import { PoolClient } from '@neondatabase/serverless'
+import { getPool } from '@/lib/db-pool'
 import { getSessionUserId } from '@/lib/auth-session'
 import { setAppUserId } from '@/lib/session-sql'
 import { backfillComparablePricingForProduct } from '@/lib/backfill-comparable'
@@ -45,8 +46,7 @@ export async function POST(
       return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
     }
 
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
-    const client = await pool.connect()
+    const client = await getPool().connect()
 
     try {
       await client.query('BEGIN')
@@ -156,8 +156,7 @@ export async function DELETE(
       return Response.json({ error: 'Product not found' }, { status: 404 })
     }
 
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
-    const client = await pool.connect()
+    const client = await getPool().connect()
 
     try {
       await client.query('BEGIN')

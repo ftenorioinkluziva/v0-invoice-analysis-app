@@ -1,6 +1,5 @@
-import { Pool } from '@neondatabase/serverless'
+import { getPool } from '@/lib/db-pool'
 import { getSessionUserId } from '@/lib/auth-session'
-import { setAppUserId } from '@/lib/session-sql'
 import { ProductResponseSchema, UpdateProductSchema, parseHistoryPeriodDaysParam } from '@/lib/validations'
 
 export async function GET(
@@ -27,16 +26,13 @@ export async function GET(
       return Response.json({ error: 'Product not found' }, { status: 404 })
     }
 
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
-    const client = await pool.connect()
+    const client = await getPool().connect()
 
     try {
-      await client.query('BEGIN')
-      await setAppUserId(client, userId)
-
       const periodDays = periodDaysResult.data
 
-      const product = await client.query(
+      // 1 roundtrip: produto + histórico + stats + variação via CTEs
+      const result = await client.query(
         `
           WITH latest_comparable_evidence AS (
             SELECT DISTINCT ON (ii.product_id)
@@ -44,125 +40,105 @@ export async function GET(
               ii.comparable_base_unit
             FROM invoice_items ii
             JOIN invoices i ON i.id = ii.invoice_id AND i.user_id = ii.user_id
-            WHERE ii.product_id = $1
-              AND ii.user_id = $2
+            WHERE ii.product_id = $1 AND ii.user_id = $2
               AND ii.comparable_base_unit IS NOT NULL
             ORDER BY ii.product_id, i.purchase_date DESC, ii.id DESC
+          ),
+          product_row AS (
+            SELECT
+              p.id, p.normalized_name, p.category, p.brand,
+              lce.comparable_base_unit,
+              pg.id AS comparable_group_id,
+              pg.display_name AS comparable_group_display_name,
+              pg.base_unit AS comparable_group_base_unit
+            FROM products p
+            LEFT JOIN latest_comparable_evidence lce ON lce.product_id = p.id
+            LEFT JOIN product_groups pg ON pg.id = p.comparable_group_id AND pg.user_id = p.user_id
+            WHERE p.id = $1 AND p.user_id = $2
+            LIMIT 1
+          ),
+          price_history AS (
+            SELECT
+              ii.unit_price AS price,
+              ii.raw_description,
+              i.purchase_date AS date,
+              s.name AS store_name
+            FROM invoice_items ii
+            JOIN invoices i ON ii.invoice_id = i.id AND i.user_id = ii.user_id
+            JOIN stores s ON i.store_id = s.id AND s.user_id = ii.user_id
+            WHERE ii.product_id = $1 AND ii.user_id = $2
+              AND i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+            ORDER BY i.purchase_date DESC
+            LIMIT 20
+          ),
+          price_stats AS (
+            SELECT
+              AVG(ii.unit_price) AS avg_price,
+              MIN(ii.unit_price) AS min_price,
+              MAX(ii.unit_price) AS max_price,
+              (SELECT unit_price FROM invoice_items ii2
+                JOIN invoices i2 ON ii2.invoice_id = i2.id AND i2.user_id = ii2.user_id
+                WHERE ii2.product_id = $1 AND ii2.user_id = $2
+                  AND i2.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+                ORDER BY i2.purchase_date ASC LIMIT 1) AS first_price,
+              (SELECT unit_price FROM invoice_items ii3
+                JOIN invoices i3 ON ii3.invoice_id = i3.id AND i3.user_id = ii3.user_id
+                WHERE ii3.product_id = $1 AND ii3.user_id = $2
+                  AND i3.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+                ORDER BY i3.purchase_date DESC LIMIT 1) AS last_price
+            FROM invoice_items ii
+            JOIN invoices i ON ii.invoice_id = i.id AND i.user_id = ii.user_id
+            WHERE ii.product_id = $1 AND ii.user_id = $2
+              AND i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
           )
           SELECT
-            p.id,
-            p.normalized_name,
-            p.category,
-            p.brand,
-            lce.comparable_base_unit,
-            pg.id AS comparable_group_id,
-            pg.display_name AS comparable_group_display_name,
-            pg.base_unit AS comparable_group_base_unit
-          FROM products
-          p
-          LEFT JOIN latest_comparable_evidence lce ON lce.product_id = p.id
-          LEFT JOIN product_groups pg ON pg.id = p.comparable_group_id AND pg.user_id = p.user_id
-          WHERE p.id = $1 AND p.user_id = $2
-          LIMIT 1
+            (SELECT row_to_json(product_row) FROM product_row) AS product,
+            COALESCE((SELECT json_agg(price_history ORDER BY date DESC) FROM price_history), '[]') AS prices,
+            (SELECT row_to_json(ps) FROM (
+              SELECT
+                avg_price, min_price, max_price,
+                CASE WHEN first_price > 0 THEN ((last_price - first_price) / first_price) * 100 ELSE 0 END AS variation
+              FROM price_stats
+            ) ps) AS stats
         `,
-        [productId, userId]
+        [productId, userId, periodDays]
       )
 
-      if (product.rows.length === 0) {
-        await client.query('ROLLBACK')
+      const row = result.rows[0]
+      if (!row.product) {
         return Response.json({ error: 'Product not found' }, { status: 404 })
       }
 
-      const priceHistory = await client.query(
-        `
-          SELECT
-            ii.unit_price AS price,
-            ii.raw_description,
-            i.purchase_date AS date,
-            s.name AS store_name
-          FROM invoice_items ii
-          JOIN invoices i ON ii.invoice_id = i.id AND i.user_id = ii.user_id
-          JOIN stores s ON i.store_id = s.id AND s.user_id = ii.user_id
-          WHERE ii.product_id = $1
-            AND ii.user_id = $2
-            AND i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
-          ORDER BY i.purchase_date DESC
-          LIMIT 20
-        `,
-        [productId, userId, periodDays]
-      )
-
-      const stats = await client.query(
-        `
-          SELECT
-            AVG(ii.unit_price) AS avg_price,
-            MIN(ii.unit_price) AS min_price,
-            MAX(ii.unit_price) AS max_price
-          FROM invoice_items ii
-          JOIN invoices i ON ii.invoice_id = i.id AND i.user_id = ii.user_id
-          WHERE ii.product_id = $1
-            AND ii.user_id = $2
-            AND i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
-        `,
-        [productId, userId, periodDays]
-      )
-
-      const variationResult = await client.query(
-        `
-          WITH filtered_prices AS (
-            SELECT ii.unit_price, i.purchase_date
-            FROM invoice_items ii
-            JOIN invoices i ON ii.invoice_id = i.id AND i.user_id = ii.user_id
-            WHERE ii.product_id = $1
-              AND ii.user_id = $2
-              AND i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
-          ),
-          first_last AS (
-            SELECT
-              (SELECT unit_price FROM filtered_prices ORDER BY purchase_date ASC LIMIT 1) AS first_price,
-              (SELECT unit_price FROM filtered_prices ORDER BY purchase_date DESC LIMIT 1) AS last_price
-          )
-          SELECT
-            CASE
-              WHEN first_price > 0 THEN ((last_price - first_price) / first_price) * 100
-              ELSE 0
-            END AS variation
-          FROM first_last
-        `,
-        [productId, userId, periodDays]
-      )
-
-      await client.query('COMMIT')
+      const p = row.product
+      const stats = row.stats ?? { avg_price: 0, min_price: 0, max_price: 0, variation: 0 }
+      const prices: Record<string, unknown>[] = row.prices
 
       return Response.json({
-        product_id: Number(product.rows[0].id),
-        product_name: String(product.rows[0].normalized_name),
-        category: product.rows[0].category ? String(product.rows[0].category) : null,
-        brand: product.rows[0].brand ? String(product.rows[0].brand) : null,
-        comparable_base_unit: product.rows[0].comparable_base_unit ?? null,
-        comparable_group: product.rows[0].comparable_group_id
+        product_id: Number(p.id),
+        product_name: String(p.normalized_name),
+        category: p.category ? String(p.category) : null,
+        brand: p.brand ? String(p.brand) : null,
+        comparable_base_unit: p.comparable_base_unit ?? null,
+        comparable_group: p.comparable_group_id
           ? {
-              id: Number(product.rows[0].comparable_group_id),
-              display_name: String(product.rows[0].comparable_group_display_name),
-              base_unit: product.rows[0].comparable_group_base_unit,
+              id: Number(p.comparable_group_id),
+              display_name: String(p.comparable_group_display_name),
+              base_unit: p.comparable_group_base_unit,
             }
           : null,
-        prices: priceHistory.rows.map(row => ({
-          date: row.date,
-          price: Number(row.price),
-          store_name: String(row.store_name),
-          raw_description: String(row.raw_description),
+        prices: prices.map(r => ({
+          date: r.date,
+          price: Number(r.price),
+          store_name: String(r.store_name),
+          raw_description: String(r.raw_description),
         })),
         stats: {
-          avg_price: Number(stats.rows[0]?.avg_price) || 0,
-          min_price: Number(stats.rows[0]?.min_price) || 0,
-          max_price: Number(stats.rows[0]?.max_price) || 0,
-          price_variation_6m: Number(variationResult.rows[0]?.variation) || 0,
+          avg_price: Number(stats.avg_price) || 0,
+          min_price: Number(stats.min_price) || 0,
+          max_price: Number(stats.max_price) || 0,
+          price_variation_6m: Number(stats.variation) || 0,
         },
       })
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
     } finally {
       client.release()
     }
@@ -199,33 +175,16 @@ export async function PATCH(
       return Response.json({ error: 'Invalid request', details: parsed.success ? undefined : parsed.error.flatten() }, { status: 400 })
     }
 
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
-    const client = await pool.connect()
-
+    const client = await getPool().connect()
     try {
-      await client.query('BEGIN')
-      await setAppUserId(client, userId)
-
       const result = await client.query(
-        `
-          UPDATE products
-          SET brand = $1
-          WHERE id = $2 AND user_id = $3
-          RETURNING id, brand
-        `,
+        `UPDATE products SET brand = $1 WHERE id = $2 AND user_id = $3 RETURNING id, brand`,
         [parsed.data.brand, productId, userId]
       )
-
       if (result.rows.length === 0) {
-        await client.query('ROLLBACK')
         return Response.json({ error: 'Product not found' }, { status: 404 })
       }
-
-      await client.query('COMMIT')
       return Response.json(ProductResponseSchema.parse(result.rows[0]))
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
     } finally {
       client.release()
     }

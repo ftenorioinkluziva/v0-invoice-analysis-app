@@ -634,7 +634,7 @@ export default function HistoricoPage() {
           </CardHeader>
           <CardContent>
             {chartData.length > 1 ? (
-              <div className="h-[200px]">
+              <div className="h-50">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
                     <defs>
@@ -676,7 +676,7 @@ export default function HistoricoPage() {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="flex h-[200px] items-center justify-center">
+              <div className="flex h-50 items-center justify-center">
                 <p className="text-sm text-muted-foreground">Dados insuficientes para grafico</p>
               </div>
             )}
@@ -880,7 +880,7 @@ export default function HistoricoPage() {
         </div>
 
         <Select value={periodDays} onValueChange={(value) => setPeriodDays(value as PeriodDays)}>
-          <SelectTrigger className="w-full bg-secondary/50 sm:w-[140px]">
+          <SelectTrigger className="w-full bg-secondary/50 sm:w-35">
             <SelectValue placeholder="Periodo" />
           </SelectTrigger>
           <SelectContent>
@@ -894,7 +894,7 @@ export default function HistoricoPage() {
 
         {viewMode === 'products' ? (
           <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="w-full bg-secondary/50 sm:w-[150px]">
+            <SelectTrigger className="w-full bg-secondary/50 sm:w-37.5">
               <SelectValue placeholder="Categoria" />
             </SelectTrigger>
             <SelectContent>

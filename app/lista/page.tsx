@@ -173,7 +173,6 @@ export default function ListaPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ product_id: productId }),
     })
-    setSearchQuery('')
     mutateDetails()
   }
 
@@ -425,9 +424,13 @@ export default function ListaPage() {
     )
   }
 
+  const hasFooter =
+    listDetails?.list.status !== 'completed' &&
+    (listDetails?.items?.length || customItems.length > 0)
+
   // List detail view
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className={cn('flex flex-col gap-4 p-4', hasFooter && 'pb-32')}>
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => { setSelectedListId(null); setCustomItems([]) }}>
@@ -457,30 +460,28 @@ export default function ListaPage() {
           className="bg-secondary/50"
         />
         {searchQuery && (
-          <Card className="absolute left-0 right-0 top-full z-10 mt-1 bg-card">
-            <ScrollArea className="max-h-48">
-              <div className="p-2">
-                {productsData?.products?.slice(0, 5).map((product) => (
-                  <button
-                    key={product.id}
-                    className="flex w-full items-center justify-between rounded-lg p-2 text-left transition-colors hover:bg-secondary/50"
-                    onClick={() => handleAddItem(product.id)}
-                  >
-                    <div>
-                      <p className="text-sm font-medium capitalize">{product.normalized_name}</p>
-                      <p className="text-xs text-muted-foreground">{product.category}</p>
-                    </div>
-                    <Plus className="h-4 w-4 text-primary" />
-                  </button>
-                ))}
-                {(!productsData?.products || productsData.products.length === 0) && (
-                  <p className="px-2 py-3 text-center text-sm text-muted-foreground">
-                    Nenhum produto encontrado no catálogo
-                  </p>
-                )}
-              </div>
-            </ScrollArea>
-          </Card>
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+            <div className="max-h-48 overflow-y-auto overscroll-contain p-1">
+              {productsData?.products?.slice(0, 5).map((product) => (
+                <button
+                  key={product.id}
+                  className="flex w-full items-center justify-between rounded-lg p-2.5 text-left transition-colors hover:bg-secondary/50"
+                  onClick={() => handleAddItem(product.id)}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium capitalize">{product.normalized_name}</p>
+                    <p className="text-xs text-muted-foreground">{product.category}</p>
+                  </div>
+                  <Plus className="ml-2 h-4 w-4 shrink-0 text-primary" />
+                </button>
+              ))}
+              {(!productsData?.products || productsData.products.length === 0) && (
+                <p className="px-2 py-3 text-center text-sm text-muted-foreground">
+                  Nenhum produto encontrado no catálogo
+                </p>
+              )}
+            </div>
+          </div>
         )}
       </div>
 

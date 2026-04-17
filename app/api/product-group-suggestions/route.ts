@@ -1,4 +1,4 @@
-import { Pool } from '@neondatabase/serverless'
+import { getPool } from '@/lib/db-pool'
 import { getSessionUserId } from '@/lib/auth-session'
 import { isMissingRelationError } from '@/lib/db-errors'
 import { setAppUserId } from '@/lib/session-sql'
@@ -14,8 +14,7 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
-    const client = await pool.connect()
+    const client = await getPool().connect()
 
     try {
       await client.query('BEGIN')
