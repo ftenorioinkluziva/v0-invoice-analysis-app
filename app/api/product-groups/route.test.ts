@@ -129,6 +129,7 @@ describe('GET /api/product-groups', () => {
               id: 3,
               display_name: 'Leites',
               base_unit: 'L',
+              comparable_occurrences: '4',
               min_unit_price: '5.79',
               avg_unit_price: '6.21',
               max_unit_price: '6.99',
@@ -154,12 +155,176 @@ describe('GET /api/product-groups', () => {
           id: 3,
           display_name: 'Leites',
           base_unit: 'L',
+          comparable_occurrences: 4,
           min_unit_price: 5.79,
           avg_unit_price: 6.21,
           max_unit_price: 6.99,
         },
       ],
     })
+  })
+
+  it('returns groups with zeroed metrics when they have no comparable occurrences in the selected period', async () => {
+    const client = createClient(async (queryText, params) => {
+      if (
+        queryText.includes('LEFT JOIN invoice_items ii')
+        && queryText.includes('MIN(CASE WHEN i.id IS NOT NULL THEN ii.comparable_unit_price END)')
+      ) {
+        expect(params).toEqual(['user-1', 'creme', '%creme%', 90])
+        return {
+          rows: [
+            {
+              id: 14,
+              display_name: 'creme leite',
+              base_unit: 'kg',
+              min_unit_price: null,
+              avg_unit_price: null,
+              max_unit_price: null,
+            },
+          ],
+        }
+      }
+
+      throw new Error(`Unexpected query: ${queryText}`)
+    })
+
+    connect.mockResolvedValue(client)
+
+    const { GET } = await import('./route')
+    const response = await GET(
+      new Request('http://localhost/api/product-groups?view=comparable&search=creme&period_days=90')
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      groups: [
+        {
+          id: 14,
+          display_name: 'creme leite',
+          base_unit: 'kg',
+          comparable_occurrences: 0,
+          min_unit_price: 0,
+          avg_unit_price: 0,
+          max_unit_price: 0,
+        },
+      ],
+    })
+  })
+
+  it('matches comparable groups when the search term is in a member product name or brand', async () => {
+    const client = createClient(async (queryText, params) => {
+      if (
+        queryText.includes('FROM product_groups pg')
+        && queryText.includes('search_products.normalized_name ILIKE $3')
+        && queryText.includes('COALESCE(search_products.brand, \'\') ILIKE $3')
+      ) {
+        expect(params).toEqual(['user-1', 'pilao', '%pilao%', 90])
+        return {
+          rows: [
+            {
+              id: 8,
+              display_name: 'Cafes',
+              base_unit: 'kg',
+              comparable_occurrences: '3',
+              min_unit_price: '31.90',
+              avg_unit_price: '34.10',
+              max_unit_price: '35.99',
+            },
+          ],
+        }
+      }
+
+      throw new Error(`Unexpected query: ${queryText}`)
+    })
+
+    connect.mockResolvedValue(client)
+
+    const { GET } = await import('./route')
+    const response = await GET(
+      new Request('http://localhost/api/product-groups?view=comparable&search=pilao&period_days=90')
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      groups: [
+        {
+          id: 8,
+          display_name: 'Cafes',
+          base_unit: 'kg',
+          comparable_occurrences: 3,
+          min_unit_price: 31.9,
+          avg_unit_price: 34.1,
+          max_unit_price: 35.99,
+        },
+      ],
+    })
+  })
+
+  it('returns all groups for manual association, including newly created ones', async () => {
+    const client = createClient(async (queryText, params) => {
+      if (queryText.includes('FROM product_groups pg') && queryText.includes('0::numeric AS min_unit_price')) {
+        expect(params).toEqual(['user-1', 'mussa', '%mussa%', 'kg'])
+        return {
+          rows: [
+            {
+              id: 11,
+              display_name: 'Mussarela',
+              base_unit: 'kg',
+              comparable_occurrences: '0',
+              min_unit_price: '0',
+              avg_unit_price: '0',
+              max_unit_price: '0',
+            },
+          ],
+        }
+      }
+
+      throw new Error(`Unexpected query: ${queryText}`)
+    })
+
+    connect.mockResolvedValue(client)
+
+    const { GET } = await import('./route')
+    const response = await GET(
+      new Request('http://localhost/api/product-groups?view=all&search=mussa&base_unit=kg')
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      groups: [
+        {
+          id: 11,
+          display_name: 'Mussarela',
+          base_unit: 'kg',
+          comparable_occurrences: 0,
+          min_unit_price: 0,
+          avg_unit_price: 0,
+          max_unit_price: 0,
+        },
+      ],
+    })
+  })
+
+  it('returns an empty list when comparable groups schema is not available yet', async () => {
+    const client = createClient(async (queryText) => {
+      if (queryText.includes('FROM product_groups pg')) {
+        const error = new Error('relation "product_groups" does not exist') as Error & { code: string }
+        error.code = '42P01'
+        throw error
+      }
+
+      throw new Error(`Unexpected query: ${queryText}`)
+    })
+
+    connect.mockResolvedValue(client)
+
+    const { GET } = await import('./route')
+    const response = await GET(
+      new Request('http://localhost/api/product-groups?view=comparable&search=leite&period_days=90')
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ groups: [] })
   })
 })
 

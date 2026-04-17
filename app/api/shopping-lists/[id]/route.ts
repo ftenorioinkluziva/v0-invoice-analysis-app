@@ -60,6 +60,15 @@ export async function GET(
               LIMIT 1
             ) AS last_price,
             (
+              SELECT ii.unit_price
+              FROM invoice_items ii
+              JOIN invoices i ON i.id = ii.invoice_id AND i.user_id = ii.user_id
+              WHERE ii.product_id = p.id
+                AND ii.user_id = p.user_id
+              ORDER BY i.purchase_date DESC, ii.id DESC
+              LIMIT 1 OFFSET 1
+            ) AS previous_price,
+            (
               SELECT ((
                 (SELECT ii2.unit_price
                   FROM invoice_items ii2
@@ -147,6 +156,7 @@ export async function GET(
           normalized_name: String(item.normalized_name),
           category: item.category ? String(item.category) : null,
           last_price: toNullableNumber(item.last_price),
+          previous_price: toNullableNumber(item.previous_price),
           price_variation: Number(item.price_variation) || 0,
           comparable_unit_price: toNullableNumber(item.comparable_unit_price),
           comparable_base_unit: item.comparable_base_unit ? String(item.comparable_base_unit) : null,

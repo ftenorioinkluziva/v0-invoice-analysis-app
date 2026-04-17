@@ -1,5 +1,6 @@
 import { Pool } from '@neondatabase/serverless'
 import { getSessionUserId } from '@/lib/auth-session'
+import { isMissingRelationError } from '@/lib/db-errors'
 import { setAppUserId } from '@/lib/session-sql'
 import { parseHistoryPeriodDaysParam } from '@/lib/validations'
 
@@ -136,6 +137,10 @@ export async function GET(
       client.release()
     }
   } catch (error) {
+    if (isMissingRelationError(error, 'product_groups')) {
+      return Response.json({ error: 'Product group not found' }, { status: 404 })
+    }
+
     console.error('Error fetching comparable product group history:', error)
     return Response.json({ error: 'Failed to fetch product group history' }, { status: 500 })
   }

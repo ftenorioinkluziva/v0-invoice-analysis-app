@@ -1,6 +1,7 @@
 import { Pool, PoolClient } from '@neondatabase/serverless'
 import { getSessionUserId } from '@/lib/auth-session'
 import { setAppUserId } from '@/lib/session-sql'
+import { backfillComparablePricingForProduct } from '@/lib/backfill-comparable'
 import {
   AssignProductGroupSchema,
   ProductGroupAssignmentResponseSchema,
@@ -107,6 +108,8 @@ export async function POST(
         `,
         [group.id, product.id, userId]
       )
+
+      await backfillComparablePricingForProduct(client, product.id, userId, group.base_unit)
 
       await client.query(
         `

@@ -65,6 +65,13 @@ export type ProductPriceHistory = {
   product_id: number
   product_name: string
   category: string | null
+  brand: string | null
+  comparable_base_unit: ComparableBaseUnit | null
+  comparable_group: {
+    id: number
+    display_name: string
+    base_unit: ComparableBaseUnit
+  } | null
   prices: {
     date: string
     price: number
@@ -79,10 +86,20 @@ export type ProductPriceHistory = {
   }
 }
 
+export type ProductGroupSuggestion = {
+  id: number
+  source_product_id: number
+  target_group_id: number
+  confidence: number
+  reasons: string[]
+  status: 'pending' | 'accepted' | 'rejected' | 'superseded'
+}
+
 export type ComparableGroupSummary = {
   id: number
   display_name: string
   base_unit: ComparableBaseUnit
+  comparable_occurrences: number
   min_unit_price: number
   avg_unit_price: number
   max_unit_price: number

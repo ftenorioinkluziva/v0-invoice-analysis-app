@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import {
+  Check,
   Search,
   TrendingDown,
   TrendingUp,
@@ -13,6 +14,11 @@ import {
   Package,
   Scale,
   CalendarRange,
+  Sparkles,
+  Link2,
+  Unlink,
+  Plus,
+  LoaderCircle,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -35,8 +41,15 @@ import {
 } from 'recharts'
 import { cn } from '@/lib/utils'
 import { ErrorState } from '@/components/error-state'
-import { ComparableGroupHistory, ComparableGroupSummary, ProductPriceHistory } from '@/lib/types'
-import { fetchJsonWithAuthRedirect } from '@/lib/client-fetch'
+import {
+  ComparableBaseUnit,
+  ComparableGroupHistory,
+  ComparableGroupSummary,
+  ProductGroupSuggestion,
+  ProductPriceHistory,
+} from '@/lib/types'
+import { fetchJsonWithAuthRedirect, fetchWithAuthRedirect } from '@/lib/client-fetch'
+import { toast } from '@/hooks/use-toast'
 
 type Product = {
   id: number
@@ -74,6 +87,10 @@ export default function HistoricoPage() {
   const [quickFilter, setQuickFilter] = useState<'all' | 'expensive' | 'frequent'>('all')
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
   const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null)
+  const [groupSearchQuery, setGroupSearchQuery] = useState('')
+  const [newGroupName, setNewGroupName] = useState('')
+  const [newGroupBaseUnit, setNewGroupBaseUnit] = useState<ComparableBaseUnit>('kg')
+  const [isMutatingGroup, setIsMutatingGroup] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -120,6 +137,24 @@ export default function HistoricoPage() {
     fetchJsonWithAuthRedirect
   )
 
+  const {
+    data: productGroupSuggestions,
+    mutate: mutateProductGroupSuggestions,
+  } = useSWR<ProductGroupSuggestion[]>(
+    selectedProductId ? '/api/product-group-suggestions' : null,
+    fetchJsonWithAuthRedirect
+  )
+
+  const assignableGroupsUrl = selectedProductId
+    ? `/api/product-groups?view=all&search=${encodeURIComponent(groupSearchQuery)}&base_unit=${encodeURIComponent(productHistory?.comparable_base_unit ?? '')}`
+    : null
+
+  const {
+    data: assignableGroupsData,
+    error: assignableGroupsError,
+    mutate: mutateAssignableGroups,
+  } = useSWR<ComparableGroupsResponse>(assignableGroupsUrl, fetchJsonWithAuthRedirect)
+
   const displayedProducts = (() => {
     const list = productsData?.products ?? []
 
@@ -158,6 +193,167 @@ export default function HistoricoPage() {
     return new Date(date).toLocaleDateString('pt-BR')
   }
 
+  const refreshComparableData = async () => {
+    await Promise.all([
+      mutateProductHistory(true),
+      mutateProducts(true),
+      mutateComparableGroups(true),
+      mutateAssignableGroups(true),
+      mutateProductGroupSuggestions(true),
+    ])
+  }
+
+  const handleOpenProduct = (productId: number) => {
+    setSelectedGroupId(null)
+    setSelectedProductId(productId)
+    setGroupSearchQuery('')
+    setNewGroupName('')
+    setNewGroupBaseUnit('kg')
+  }
+
+  const handleAssignGroup = async (groupId: number) => {
+    if (!selectedProductId) {
+      return
+    }
+
+    setIsMutatingGroup(true)
+
+    try {
+      const response = await fetchJsonWithAuthRedirect(`/api/products/${selectedProductId}/group-assignment`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          group_id: groupId,
+          allow_missing_comparable_evidence: true,
+        }),
+      })
+
+      await refreshComparableData()
+      toast({
+        title: 'Grupo atualizado',
+        description: `${response.display_name} foi associado ao produto.`,
+      })
+    } catch (error) {
+      toast({
+        title: 'Nao foi possivel associar o grupo',
+        description: getErrorMessage(error),
+        variant: 'destructive',
+      })
+    } finally {
+      setIsMutatingGroup(false)
+    }
+  }
+
+  const handleCreateGroup = async (preferredBaseUnit: ComparableBaseUnit) => {
+    if (!selectedProductId) {
+      return
+    }
+
+    const displayName = newGroupName.trim()
+    if (!displayName) {
+      toast({
+        title: 'Informe um nome para o grupo',
+        description: 'Use um nome curto como Leites, Mussarela ou Tomate Sweet Grape.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setIsMutatingGroup(true)
+
+    try {
+      const group = await fetchJsonWithAuthRedirect<{ id: number; display_name: string; base_unit: ComparableBaseUnit }>(
+        '/api/product-groups',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            display_name: displayName,
+            base_unit: newGroupBaseUnit || preferredBaseUnit,
+          }),
+        }
+      )
+
+      await fetchJsonWithAuthRedirect(`/api/products/${selectedProductId}/group-assignment`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          group_id: group.id,
+          allow_missing_comparable_evidence: true,
+        }),
+      })
+
+      setNewGroupName('')
+      await refreshComparableData()
+      toast({
+        title: 'Grupo criado',
+        description: `${group.display_name} foi criado e associado ao produto.`,
+      })
+    } catch (error) {
+      toast({
+        title: 'Nao foi possivel criar o grupo',
+        description: getErrorMessage(error),
+        variant: 'destructive',
+      })
+    } finally {
+      setIsMutatingGroup(false)
+    }
+  }
+
+  const handleRemoveGroup = async () => {
+    if (!selectedProductId) {
+      return
+    }
+
+    setIsMutatingGroup(true)
+
+    try {
+      await fetchWithAuthRedirect(`/api/products/${selectedProductId}/group-assignment`, {
+        method: 'DELETE',
+      })
+
+      await refreshComparableData()
+      toast({
+        title: 'Grupo removido',
+        description: 'O produto voltou a ficar sem grupo comparavel.',
+      })
+    } catch (error) {
+      toast({
+        title: 'Nao foi possivel remover o grupo',
+        description: getErrorMessage(error),
+        variant: 'destructive',
+      })
+    } finally {
+      setIsMutatingGroup(false)
+    }
+  }
+
+  const handleSuggestionDecision = async (suggestionId: number, action: 'accept' | 'reject') => {
+    setIsMutatingGroup(true)
+
+    try {
+      await fetchJsonWithAuthRedirect(`/api/product-group-suggestions/${suggestionId}/${action}`, {
+        method: 'POST',
+      })
+
+      await refreshComparableData()
+      toast({
+        title: action === 'accept' ? 'Sugestao aceita' : 'Sugestao descartada',
+        description: action === 'accept'
+          ? 'O produto foi associado ao grupo sugerido.'
+          : 'A sugestao foi removida da fila pendente.',
+      })
+    } catch (error) {
+      toast({
+        title: 'Nao foi possivel atualizar a sugestao',
+        description: getErrorMessage(error),
+        variant: 'destructive',
+      })
+    } finally {
+      setIsMutatingGroup(false)
+    }
+  }
+
   if (selectedProductId) {
     if (productHistoryError) {
       return <ErrorState message="Erro ao carregar historico do produto" onRetry={() => mutateProductHistory()} />
@@ -167,12 +363,20 @@ export default function HistoricoPage() {
       return null
     }
 
-    const chartData = [...productHistory.prices]
+    const chartData = [...(productHistory?.prices ?? [])]
       .reverse()
       .map((pricePoint) => ({
         date: formatShortDate(pricePoint.date),
         price: pricePoint.price,
       }))
+
+    const selectedSuggestion = Array.isArray(productGroupSuggestions)
+      ? productGroupSuggestions.find(
+          suggestion => suggestion.source_product_id === productHistory.product_id
+        )
+      : undefined
+    const preferredBaseUnit = productHistory.comparable_base_unit ?? newGroupBaseUnit
+    const compatibleGroups = assignableGroupsData?.groups ?? []
 
     return (
       <div className="flex flex-col gap-4 p-4">
@@ -182,16 +386,199 @@ export default function HistoricoPage() {
           </Button>
           <div>
             <h1 className="text-lg font-bold capitalize text-foreground">{productHistory.product_name}</h1>
-            <p className="text-sm text-muted-foreground">{productHistory.category || 'Sem categoria'}</p>
+            <p className="text-sm text-muted-foreground">
+              {productHistory.brand ? `${productHistory.brand} • ` : ''}
+              {productHistory.category || 'Sem categoria'}
+            </p>
           </div>
         </header>
+
+        <Card className="bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Link2 className="h-4 w-4 text-muted-foreground" />
+              Agrupamento comparavel
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="rounded-lg bg-secondary/30 p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">
+                    {productHistory.comparable_group
+                      ? productHistory.comparable_group.display_name
+                      : 'Produto sem grupo comparavel'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {productHistory.comparable_group
+                      ? `Referencia atual em R$/${productHistory.comparable_group.base_unit}`
+                      : 'Crie ou associe um grupo para comparar embalagens e marcas parecidas.'}
+                  </p>
+                  {productHistory.comparable_base_unit ? (
+                    <p className="text-xs text-muted-foreground">
+                      Unidade detectada no historico: {productHistory.comparable_base_unit}
+                    </p>
+                  ) : null}
+                </div>
+
+                {productHistory.comparable_group ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedProductId(null)
+                        setSelectedGroupId(productHistory.comparable_group!.id)
+                      }}
+                    >
+                      Ver grupo
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleRemoveGroup}
+                      disabled={isMutatingGroup}
+                    >
+                      {isMutatingGroup ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Unlink className="mr-2 h-4 w-4" />}
+                      Remover
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {!productHistory.comparable_group && selectedSuggestion ? (
+              <div className="rounded-lg border border-dashed border-border bg-secondary/20 p-3">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <div className="flex-1 space-y-2">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Sugestao automatica disponivel</p>
+                      <p className="text-xs text-muted-foreground">
+                        Confianca de {(selectedSuggestion.confidence * 100).toFixed(0)}% para associar este produto.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      {selectedSuggestion.reasons.map(reason => (
+                        <span key={reason} className="rounded-full bg-secondary px-2 py-1">
+                          {reason}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        onClick={() => handleSuggestionDecision(selectedSuggestion.id, 'accept')}
+                        disabled={isMutatingGroup}
+                      >
+                        {isMutatingGroup ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                        Aceitar sugestao
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleSuggestionDecision(selectedSuggestion.id, 'reject')}
+                        disabled={isMutatingGroup}
+                      >
+                        Ignorar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {!productHistory.comparable_group ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="space-y-3 rounded-lg bg-secondary/20 p-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Criar novo grupo</p>
+                    <p className="text-xs text-muted-foreground">
+                      Use isso quando quiser juntar este produto com outras embalagens equivalentes.
+                    </p>
+                  </div>
+
+                  <Input
+                    value={newGroupName}
+                    onChange={(event) => setNewGroupName(event.target.value)}
+                    placeholder="Ex.: Mussarela fatiada"
+                    className="bg-background"
+                  />
+
+                  <Select
+                    value={newGroupBaseUnit}
+                    onValueChange={(value) => setNewGroupBaseUnit(value as ComparableBaseUnit)}
+                  >
+                    <SelectTrigger className="bg-background">
+                      <SelectValue placeholder="Unidade base" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kg">kg</SelectItem>
+                      <SelectItem value="L">L</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Button type="button" onClick={() => handleCreateGroup(preferredBaseUnit)} disabled={isMutatingGroup}>
+                    {isMutatingGroup ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                    Criar e associar
+                  </Button>
+                </div>
+
+                <div className="space-y-3 rounded-lg bg-secondary/20 p-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Associar a grupo existente</p>
+                    <p className="text-xs text-muted-foreground">
+                      Busque um grupo parecido e vincule este produto manualmente.
+                    </p>
+                  </div>
+
+                  <Input
+                    value={groupSearchQuery}
+                    onChange={(event) => setGroupSearchQuery(event.target.value)}
+                    placeholder="Buscar grupo..."
+                    className="bg-background"
+                  />
+
+                  {assignableGroupsError ? (
+                    <p className="text-xs text-destructive">Nao foi possivel carregar os grupos disponiveis.</p>
+                  ) : compatibleGroups.length > 0 ? (
+                    <div className="space-y-2">
+                      {compatibleGroups.slice(0, 6).map(group => (
+                        <div key={group.id} className="flex items-center justify-between gap-3 rounded-lg bg-background p-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-foreground">{group.display_name}</p>
+                            <p className="text-xs text-muted-foreground">Referencia em R$/{group.base_unit}</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleAssignGroup(group.id)}
+                            disabled={isMutatingGroup}
+                          >
+                            Associar
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Nenhum grupo encontrado com esse filtro. Voce pode criar um novo grupo ao lado.
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-2 gap-3">
           <Card className="bg-card">
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Preco medio</p>
               <p className="font-mono text-lg font-semibold text-foreground">
-                {formatCurrency(productHistory.stats.avg_price)}
+                {formatCurrency(productHistory?.stats?.avg_price ?? 0)}
               </p>
             </CardContent>
           </Card>
@@ -201,22 +588,22 @@ export default function HistoricoPage() {
               <p
                 className={cn(
                   'flex items-center gap-1 font-mono text-lg font-semibold',
-                  productHistory.stats.price_variation_6m > 0
+                  (productHistory.stats?.price_variation_6m ?? 0) > 0
                     ? 'text-destructive'
-                    : productHistory.stats.price_variation_6m < 0
+                    : (productHistory.stats?.price_variation_6m ?? 0) < 0
                       ? 'text-success'
                       : 'text-foreground'
                 )}
               >
-                {productHistory.stats.price_variation_6m > 0 ? (
+                {(productHistory.stats?.price_variation_6m ?? 0) > 0 ? (
                   <TrendingUp className="h-4 w-4" />
-                ) : productHistory.stats.price_variation_6m < 0 ? (
+                ) : (productHistory.stats?.price_variation_6m ?? 0) < 0 ? (
                   <TrendingDown className="h-4 w-4" />
                 ) : (
                   <Minus className="h-4 w-4" />
                 )}
-                {productHistory.stats.price_variation_6m > 0 ? '+' : ''}
-                {productHistory.stats.price_variation_6m.toFixed(1)}%
+                {(productHistory.stats?.price_variation_6m ?? 0) > 0 ? '+' : ''}
+                {(productHistory.stats?.price_variation_6m ?? 0).toFixed(1)}%
               </p>
             </CardContent>
           </Card>
@@ -224,7 +611,7 @@ export default function HistoricoPage() {
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Menor preco</p>
               <p className="font-mono text-lg font-semibold text-success">
-                {formatCurrency(productHistory.stats.min_price)}
+                {formatCurrency(productHistory.stats?.min_price ?? 0)}
               </p>
             </CardContent>
           </Card>
@@ -232,7 +619,7 @@ export default function HistoricoPage() {
             <CardContent className="p-3">
               <p className="text-xs text-muted-foreground">Maior preco</p>
               <p className="font-mono text-lg font-semibold text-destructive">
-                {formatCurrency(productHistory.stats.max_price)}
+                {formatCurrency(productHistory.stats?.max_price ?? 0)}
               </p>
             </CardContent>
           </Card>
@@ -305,7 +692,7 @@ export default function HistoricoPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {Object.values(
-              productHistory.prices.reduce<
+              (productHistory.prices ?? []).reduce<
                 Record<string, { store: string; min: number; max: number; sum: number; count: number }>
               >((accumulator, pricePoint) => {
                 const key = pricePoint.store_name
@@ -338,7 +725,10 @@ export default function HistoricoPage() {
                     <p className="font-mono text-sm font-semibold text-foreground">
                       {formatCurrency(row.sum / row.count)}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">Media</p>
+                    <span className="text-xs">
+                      {(productHistory.stats?.price_variation_6m ?? 0) > 0 ? '+' : ''}
+                      {(productHistory.stats?.price_variation_6m ?? 0).toFixed(1)}%
+                    </span>
                   </div>
                   <div>
                     <p className="font-mono text-sm font-semibold text-destructive">{formatCurrency(row.max)}</p>
@@ -570,7 +960,7 @@ export default function HistoricoPage() {
                 <Card
                   key={product.id}
                   className="cursor-pointer bg-card transition-colors hover:bg-secondary/50"
-                  onClick={() => setSelectedProductId(product.id)}
+                  onClick={() => handleOpenProduct(product.id)}
                 >
                   <CardContent className="flex items-center justify-between gap-3 p-3">
                     <div className="min-w-0 flex-1">
@@ -613,6 +1003,13 @@ export default function HistoricoPage() {
                         <Scale className="h-3.5 w-3.5" />
                         <span>Referencia em R$/{group.base_unit}</span>
                       </div>
+                        {group.comparable_occurrences === 0 ? (
+                          <p className="mt-1 text-xs text-amber-400">Sem ocorrencias comparaveis no periodo selecionado</p>
+                        ) : (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {group.comparable_occurrences} ocorrencia{group.comparable_occurrences !== 1 ? 's' : ''} no periodo
+                          </p>
+                        )}
                     </div>
                     <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                   </div>
@@ -687,4 +1084,12 @@ function EmptyHistoryState({ title, description }: { title: string; description:
       </CardContent>
     </Card>
   )
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  return 'Tente novamente em instantes.'
 }

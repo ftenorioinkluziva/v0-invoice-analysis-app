@@ -1,5 +1,6 @@
 import { Pool } from '@neondatabase/serverless'
 import { getSessionUserId } from '@/lib/auth-session'
+import { isMissingRelationError } from '@/lib/db-errors'
 import { setAppUserId } from '@/lib/session-sql'
 import {
   listPendingProductGroupSuggestions,
@@ -32,6 +33,10 @@ export async function GET(request: Request) {
       client.release()
     }
   } catch (error) {
+    if (isMissingRelationError(error, 'product_groups')) {
+      return Response.json([])
+    }
+
     console.error('Error listing product group suggestions:', error)
     return Response.json({ error: 'Failed to list product group suggestions' }, { status: 500 })
   }

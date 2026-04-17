@@ -97,9 +97,22 @@ describe('GET /api/products/[id]', () => {
 
   it('returns history scoped to the requested period', async () => {
     const client = createClient(async (queryText, params) => {
-      if (queryText.includes('FROM products') && queryText.includes('WHERE id = $1 AND user_id = $2')) {
+      if (queryText.includes('FROM products') && queryText.includes('LEFT JOIN product_groups pg')) {
         expect(params).toEqual([12, 'user-1'])
-        return { rows: [{ id: 12, normalized_name: 'leite integral', category: 'Laticinios' }] }
+        return {
+          rows: [
+            {
+              id: 12,
+              normalized_name: 'leite integral',
+              category: 'Laticinios',
+              brand: 'Marca Boa',
+              comparable_base_unit: 'L',
+              comparable_group_id: 7,
+              comparable_group_display_name: 'Leites',
+              comparable_group_base_unit: 'L',
+            },
+          ],
+        }
       }
 
       if (queryText.includes('FROM invoice_items ii') && queryText.includes('LIMIT 20')) {
@@ -140,6 +153,13 @@ describe('GET /api/products/[id]', () => {
       product_id: 12,
       product_name: 'leite integral',
       category: 'Laticinios',
+      brand: 'Marca Boa',
+      comparable_base_unit: 'L',
+      comparable_group: {
+        id: 7,
+        display_name: 'Leites',
+        base_unit: 'L',
+      },
       prices: [
         {
           date: '2026-04-10',

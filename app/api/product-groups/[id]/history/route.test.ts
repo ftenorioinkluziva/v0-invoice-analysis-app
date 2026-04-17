@@ -112,6 +112,29 @@ describe('GET /api/product-groups/[id]/history', () => {
       ],
     })
   })
+
+  it('returns 404 when comparable group schema is not available yet', async () => {
+    const client = createClient(async (queryText) => {
+      if (queryText.includes('FROM product_groups') && queryText.includes('WHERE id = $1 AND user_id = $2')) {
+        const error = new Error('relation "product_groups" does not exist') as Error & { code: string }
+        error.code = '42P01'
+        throw error
+      }
+
+      throw new Error(`Unexpected query: ${queryText}`)
+    })
+
+    connect.mockResolvedValue(client)
+
+    const { GET } = await import('./route')
+    const response = await GET(
+      new Request('http://localhost/api/product-groups/3/history?period_days=90'),
+      { params: Promise.resolve({ id: '3' }) }
+    )
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toEqual({ error: 'Product group not found' })
+  })
 })
 
 function createClient(handler: (queryText: string, params?: unknown[]) => Promise<{ rows: unknown[] }>) {

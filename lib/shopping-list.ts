@@ -9,6 +9,7 @@ export type ShoppingListDetailItem = {
   normalized_name: string
   category: string | null
   last_price: number | null
+  previous_price: number | null
   price_variation: number
   comparable_unit_price: number | null
   comparable_base_unit: ComparableBaseUnit | null

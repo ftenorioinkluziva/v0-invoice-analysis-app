@@ -33,6 +33,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ErrorState } from '@/components/error-state'
 import { fetchJsonWithAuthRedirect, fetchWithAuthRedirect } from '@/lib/client-fetch'
@@ -562,26 +563,30 @@ export default function ListaPage() {
               <h3 className="mb-2 text-sm font-medium text-muted-foreground">{category}</h3>
               <div className="space-y-2">
                 {items.map((item) => (
-                  <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-60')}>
+                  <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-50')}>
                     <CardContent className="flex items-center gap-3 p-3">
+                      {/* Checkbox maior para toque fácil */}
                       <Checkbox
                         checked={item.checked}
                         onCheckedChange={(checked) =>
                           handleToggleItem(item.id, checked as boolean)
                         }
-                        className="h-5 w-5"
+                        className="h-7 w-7 shrink-0 rounded-md"
                       />
-                      <div className="flex-1 space-y-1">
+
+                      {/* Bloco central: nome + linha de preço + referência comparável */}
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        {/* Linha 1: nome + controles de quantidade */}
                         <div className="flex items-center justify-between gap-2">
                           <p
                             className={cn(
-                              'text-sm font-medium capitalize',
-                              item.checked && 'line-through'
+                              'truncate text-sm font-semibold capitalize leading-tight',
+                              item.checked && 'line-through text-muted-foreground'
                             )}
                           >
                             {item.normalized_name}
                           </p>
-                          <div className="flex items-center gap-1">
+                          <div className="flex shrink-0 items-center gap-1">
                             <Button
                               variant="outline"
                               size="icon"
@@ -606,47 +611,96 @@ export default function ListaPage() {
                             </Button>
                           </div>
                         </div>
+
+                        {/* Linha 2: preço unitário (só se qty > 1) + variação */}
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            {formatItemUnitPrice(item)}
-                          </span>
-                          {item.price_variation !== 0 && (
-                            <span
-                              className={cn(
-                                'flex items-center gap-0.5 text-xs',
-                                item.price_variation > 0 ? 'text-destructive' : 'text-success'
-                              )}
-                            >
-                              {item.price_variation > 0 ? (
-                                <TrendingUp className="h-3 w-3" />
-                              ) : item.price_variation < 0 ? (
-                                <TrendingDown className="h-3 w-3" />
-                              ) : (
-                                <Minus className="h-3 w-3" />
-                              )}
-                              {Math.abs(item.price_variation).toFixed(0)}%
+                          {item.quantity > 1 && (
+                            <span className="text-xs text-muted-foreground">
+                              {formatItemUnitPrice(item)}
                             </span>
                           )}
+                          {item.price_variation !== 0 && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button
+                                  className={cn(
+                                    'flex items-center gap-0.5 text-xs font-medium',
+                                    item.price_variation > 0 ? 'text-destructive' : 'text-success'
+                                  )}
+                                >
+                                  {item.price_variation > 0 ? (
+                                    <TrendingUp className="h-3 w-3" />
+                                  ) : (
+                                    <TrendingDown className="h-3 w-3" />
+                                  )}
+                                  {Math.abs(item.price_variation).toFixed(0)}%
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent side="top" className="w-64 p-3 text-xs">
+                                <p className="font-semibold text-foreground">Variação de preço</p>
+                                <p className="mt-1 text-muted-foreground">
+                                  Comparação entre suas duas últimas compras deste produto.
+                                  {item.last_price !== null && item.previous_price !== null && (
+                                    <>
+                                      {' '}Última:{' '}
+                                      <span className="font-semibold text-foreground">
+                                        {formatCurrency(item.last_price)}
+                                      </span>
+                                      {' '}— Penúltima:{' '}
+                                      <span className="font-semibold text-foreground">
+                                        {formatCurrency(item.previous_price)}
+                                      </span>
+                                      {'. '}
+                                      {item.price_variation > 0
+                                        ? `Ficou ${Math.abs(item.price_variation).toFixed(0)}% mais caro.`
+                                        : `Ficou ${Math.abs(item.price_variation).toFixed(0)}% mais barato.`}
+                                    </>
+                                  )}
+                                </p>
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
+
+                        {/* Linha 3: referência comparável do grupo — destaque sutil */}
                         {formatComparableReference(item) && (
-                          <p className="truncate text-xs text-muted-foreground">
-                            {[getShoppingListItemComparableContext(item), formatComparableReference(item)]
-                              .filter(Boolean)
-                              .join(' • ')}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-xs font-semibold text-foreground">
+                              {getShoppingListItemComparableContext(item)}
+                            </span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="shrink-0 rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+                                  {formatComparableReference(item)}
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent side="top" className="w-64 p-3 text-xs">
+                                <p className="font-semibold text-foreground">Preço de referência do grupo</p>
+                                <p className="mt-1 text-muted-foreground">
+                                  Média do preço por {item.comparable_base_unit} de todos os produtos do grupo{' '}
+                                  <span className="font-semibold text-foreground">
+                                    {item.comparable_group_name}
+                                  </span>
+                                  {' '}nos últimos 90 dias. Serve para comparar marcas e embalagens diferentes pelo mesmo peso ou volume.
+                                </p>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-medium">
+
+                      {/* Bloco direito: total + lixeira */}
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <span className="font-mono text-sm font-semibold">
                           {formatCurrency(getShoppingListItemTotal(item))}
                         </span>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
                           onClick={() => handleDeleteItem(item.id)}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
                     </CardContent>
@@ -678,14 +732,14 @@ export default function ListaPage() {
           <h3 className="mb-2 text-sm font-medium text-muted-foreground">Itens Avulsos</h3>
           <div className="space-y-2">
             {customItems.map((item) => (
-              <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-60')}>
+              <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-50')}>
                 <CardContent className="flex items-center gap-3 p-3">
                   <Checkbox
                     checked={item.checked}
                     onCheckedChange={(checked) =>
                       handleToggleCustomItem(item.id, checked as boolean)
                     }
-                    className="h-5 w-5"
+                    className="h-7 w-7 shrink-0 rounded-md"
                   />
                   <p
                     className={cn(

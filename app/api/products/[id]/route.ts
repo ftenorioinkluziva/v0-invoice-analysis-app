@@ -38,9 +38,31 @@ export async function GET(
 
       const product = await client.query(
         `
-          SELECT id, normalized_name, category
+          WITH latest_comparable_evidence AS (
+            SELECT DISTINCT ON (ii.product_id)
+              ii.product_id,
+              ii.comparable_base_unit
+            FROM invoice_items ii
+            JOIN invoices i ON i.id = ii.invoice_id AND i.user_id = ii.user_id
+            WHERE ii.product_id = $1
+              AND ii.user_id = $2
+              AND ii.comparable_base_unit IS NOT NULL
+            ORDER BY ii.product_id, i.purchase_date DESC, ii.id DESC
+          )
+          SELECT
+            p.id,
+            p.normalized_name,
+            p.category,
+            p.brand,
+            lce.comparable_base_unit,
+            pg.id AS comparable_group_id,
+            pg.display_name AS comparable_group_display_name,
+            pg.base_unit AS comparable_group_base_unit
           FROM products
-          WHERE id = $1 AND user_id = $2
+          p
+          LEFT JOIN latest_comparable_evidence lce ON lce.product_id = p.id
+          LEFT JOIN product_groups pg ON pg.id = p.comparable_group_id AND pg.user_id = p.user_id
+          WHERE p.id = $1 AND p.user_id = $2
           LIMIT 1
         `,
         [productId, userId]
@@ -116,6 +138,15 @@ export async function GET(
         product_id: Number(product.rows[0].id),
         product_name: String(product.rows[0].normalized_name),
         category: product.rows[0].category ? String(product.rows[0].category) : null,
+        brand: product.rows[0].brand ? String(product.rows[0].brand) : null,
+        comparable_base_unit: product.rows[0].comparable_base_unit ?? null,
+        comparable_group: product.rows[0].comparable_group_id
+          ? {
+              id: Number(product.rows[0].comparable_group_id),
+              display_name: String(product.rows[0].comparable_group_display_name),
+              base_unit: product.rows[0].comparable_group_base_unit,
+            }
+          : null,
         prices: priceHistory.rows.map(row => ({
           date: row.date,
           price: Number(row.price),
