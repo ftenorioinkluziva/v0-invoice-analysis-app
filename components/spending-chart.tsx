@@ -40,7 +40,7 @@ export function SpendingChart({ data, isLoading }: SpendingChartProps) {
           <CardTitle className="text-base">Evolucao de Gastos</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[180px] animate-pulse rounded bg-secondary/50" />
+          <div className="h-45 animate-pulse rounded bg-secondary/50" />
         </CardContent>
       </Card>
     )
@@ -53,7 +53,7 @@ export function SpendingChart({ data, isLoading }: SpendingChartProps) {
           <CardTitle className="text-base">Evolucao de Gastos</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex h-[180px] items-center justify-center">
+          <div className="flex h-45 items-center justify-center">
             <p className="text-sm text-muted-foreground">
               Dados insuficientes para exibir grafico
             </p>
@@ -74,7 +74,7 @@ export function SpendingChart({ data, isLoading }: SpendingChartProps) {
         <CardTitle className="text-base">Evolucao de Gastos</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="h-[180px]">
+        <div className="h-45">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
               <defs>

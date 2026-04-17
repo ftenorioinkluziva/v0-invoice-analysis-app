@@ -23,7 +23,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Select,
   SelectContent,
@@ -947,7 +946,7 @@ export default function HistoricoPage() {
         </div>
       ) : null}
 
-      <ScrollArea className="flex-1">
+      <div>
         {activeListError ? (
           <ErrorState
             message={viewMode === 'products' ? 'Erro ao carregar produtos' : 'Erro ao carregar comparaveis'}
@@ -1029,7 +1028,7 @@ export default function HistoricoPage() {
             description={searchQuery ? 'Tente uma busca diferente' : 'Nenhum grupo com ocorrencias comparaveis no periodo selecionado'}
           />
         )}
-      </ScrollArea>
+      </div>
     </div>
   )
 }

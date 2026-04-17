@@ -34,7 +34,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { ErrorState } from '@/components/error-state'
 import { fetchJsonWithAuthRedirect, fetchWithAuthRedirect } from '@/lib/client-fetch'
 import {
@@ -541,12 +540,12 @@ export default function ListaPage() {
               {listDetails.suggestions.map((suggestion) => (
                 <button
                   key={suggestion.product_id}
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/30 px-3 py-1.5 text-sm transition-colors hover:bg-secondary"
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/20 px-2.5 py-1 text-sm transition-colors hover:border-primary/30 hover:bg-secondary"
                   onClick={() => handleAddItem(suggestion.product_id)}
                 >
-                  <Plus className="h-3 w-3 text-primary" />
-                  <span className="capitalize truncate max-w-40">{suggestion.normalized_name}</span>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  <Plus className="h-3 w-3 shrink-0 text-primary" />
+                  <span className="max-w-36 truncate capitalize">{suggestion.normalized_name}</span>
+                  <span className="shrink-0 rounded bg-secondary px-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
                     {suggestion.days_since_purchase}d
                   </span>
                 </button>
@@ -561,12 +560,22 @@ export default function ListaPage() {
         <div className="space-y-4">
           {Object.entries(groupedItems).map(([category, items]) => (
             <div key={category}>
-              <h3 className="mb-2 text-sm font-medium text-muted-foreground">{category}</h3>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">{category}</span>
+                <div className="h-px flex-1 bg-border/50" />
+              </div>
               <div className="space-y-2">
                 {items.map((item) => (
-                  <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-50')}>
+                  <Card
+                    key={item.id}
+                    className={cn(
+                      'bg-card transition-all duration-200',
+                      item.checked
+                        ? 'border-l-2 border-l-border opacity-50'
+                        : 'border-l-2 border-l-primary/40'
+                    )}
+                  >
                     <CardContent className="flex items-center gap-3 p-3">
-                      {/* Checkbox maior para toque fácil */}
                       <Checkbox
                         checked={item.checked}
                         onCheckedChange={(checked) =>
@@ -575,13 +584,11 @@ export default function ListaPage() {
                         className="h-7 w-7 shrink-0 rounded-md"
                       />
 
-                      {/* Bloco central: nome + linha de preço + referência comparável */}
                       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        {/* Linha 1: nome + controles de quantidade */}
                         <div className="flex items-center justify-between gap-2">
                           <p
                             className={cn(
-                              'truncate text-sm font-semibold capitalize leading-tight',
+                              'truncate text-sm font-semibold capitalize leading-tight transition-all duration-200',
                               item.checked && 'line-through text-muted-foreground'
                             )}
                           >
@@ -613,7 +620,6 @@ export default function ListaPage() {
                           </div>
                         </div>
 
-                        {/* Linha 2: preço unitário (só se qty > 1) + variação */}
                         <div className="flex items-center gap-2">
                           {item.quantity > 1 && (
                             <span className="text-xs text-muted-foreground">
@@ -621,49 +627,24 @@ export default function ListaPage() {
                             </span>
                           )}
                           {item.price_variation !== 0 && (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  className={cn(
-                                    'flex items-center gap-0.5 text-xs font-medium',
-                                    item.price_variation > 0 ? 'text-destructive' : 'text-success'
-                                  )}
-                                >
-                                  {item.price_variation > 0 ? (
-                                    <TrendingUp className="h-3 w-3" />
-                                  ) : (
-                                    <TrendingDown className="h-3 w-3" />
-                                  )}
-                                  {Math.abs(item.price_variation).toFixed(0)}%
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent side="top" className="w-64 p-3 text-xs">
-                                <p className="font-semibold text-foreground">Variação de preço</p>
-                                <p className="mt-1 text-muted-foreground">
-                                  Comparação entre suas duas últimas compras deste produto.
-                                  {item.last_price !== null && item.previous_price !== null && (
-                                    <>
-                                      {' '}Última:{' '}
-                                      <span className="font-semibold text-foreground">
-                                        {formatCurrency(item.last_price)}
-                                      </span>
-                                      {' '}— Penúltima:{' '}
-                                      <span className="font-semibold text-foreground">
-                                        {formatCurrency(item.previous_price)}
-                                      </span>
-                                      {'. '}
-                                      {item.price_variation > 0
-                                        ? `Ficou ${Math.abs(item.price_variation).toFixed(0)}% mais caro.`
-                                        : `Ficou ${Math.abs(item.price_variation).toFixed(0)}% mais barato.`}
-                                    </>
-                                  )}
-                                </p>
-                              </PopoverContent>
-                            </Popover>
+                            <span
+                              className={cn(
+                                'inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-semibold',
+                                item.price_variation > 0
+                                  ? 'bg-destructive/10 text-destructive'
+                                  : 'bg-success/10 text-success'
+                              )}
+                            >
+                              {item.price_variation > 0 ? (
+                                <TrendingUp className="h-3 w-3" />
+                              ) : (
+                                <TrendingDown className="h-3 w-3" />
+                              )}
+                              {Math.abs(item.price_variation).toFixed(0)}%
+                            </span>
                           )}
                         </div>
 
-                        {/* Linha 3: referência comparável do grupo — destaque sutil */}
                         {formatComparableReference(item) && (
                           <div className="flex items-center gap-1.5">
                             <span className="truncate text-xs font-semibold text-foreground">
@@ -690,19 +671,20 @@ export default function ListaPage() {
                         )}
                       </div>
 
-                      {/* Bloco direito: total + lixeira */}
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <span className="font-mono text-sm font-semibold">
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <span className={cn(
+                          'font-mono text-base font-bold transition-all duration-200',
+                          item.checked && 'text-muted-foreground'
+                        )}>
                           {formatCurrency(getShoppingListItemTotal(item))}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        <button
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-destructive"
                           onClick={() => handleDeleteItem(item.id)}
+                          aria-label="Remover item"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        </button>
                       </div>
                     </CardContent>
                   </Card>
@@ -789,8 +771,8 @@ export default function ListaPage() {
 
       {/* Sticky footer — total + CTA */}
       {listDetails?.list.status !== 'completed' && (listDetails?.items?.length || customItems.length > 0) ? (
-        <div className="fixed bottom-20 left-1/2 w-full max-w-lg -translate-x-1/2 px-4 pb-safe">
-          <div className="flex items-center justify-between rounded-xl border border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur-sm">
+        <div className="fixed bottom-0 left-1/2 w-full max-w-lg -translate-x-1/2 px-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pt-2">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-md">
             <div>
               <p className="text-xs text-muted-foreground">Total estimado</p>
               <p className="font-mono text-base font-bold text-foreground">{formatCurrency(estimatedTotal)}</p>
