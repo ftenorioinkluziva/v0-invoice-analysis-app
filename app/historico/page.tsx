@@ -514,8 +514,9 @@ export default function HistoricoPage() {
                       <SelectValue placeholder="Unidade base" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="kg">kg</SelectItem>
-                      <SelectItem value="L">L</SelectItem>
+                      <SelectItem value="kg">kg — por quilo</SelectItem>
+                      <SelectItem value="L">L — por litro</SelectItem>
+                      <SelectItem value="un">un — por unidade</SelectItem>
                     </SelectContent>
                   </Select>
 
