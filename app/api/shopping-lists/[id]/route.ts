@@ -2,6 +2,7 @@ import { getPool } from '@/lib/db-pool'
 import { AddListItemSchema, UpdateListItemSchema, DeleteListItemSchema } from '@/lib/validations'
 import { getSessionUserId } from '@/lib/auth-session'
 import { getComparableReferenceLabel, toNullableNumber } from '@/lib/shopping-list'
+import type { ComparableBaseUnit } from '@/lib/types'
 
 export async function GET(
   request: Request,
@@ -133,7 +134,7 @@ export async function GET(
           comparable_unit_price: toNullableNumber(item.comparable_unit_price),
           comparable_base_unit: item.comparable_base_unit ? String(item.comparable_base_unit) : null,
           comparable_reference_label: getComparableReferenceLabel(
-            item.comparable_base_unit ? String(item.comparable_base_unit) as 'kg' | 'L' : null
+            item.comparable_base_unit ? String(item.comparable_base_unit) as ComparableBaseUnit : null
           ),
           comparable_group_name: item.comparable_group_name ? String(item.comparable_group_name) : null,
         })),

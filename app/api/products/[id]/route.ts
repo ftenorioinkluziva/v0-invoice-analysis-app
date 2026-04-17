@@ -46,7 +46,7 @@ export async function GET(
           ),
           product_row AS (
             SELECT
-              p.id, p.normalized_name, p.category, p.brand,
+              p.id, p.normalized_name, p.category, p.brand, p.units_per_pack,
               lce.comparable_base_unit,
               pg.id AS comparable_group_id,
               pg.display_name AS comparable_group_display_name,
@@ -118,6 +118,7 @@ export async function GET(
         product_name: String(p.normalized_name),
         category: p.category ? String(p.category) : null,
         brand: p.brand ? String(p.brand) : null,
+        units_per_pack: p.units_per_pack != null ? Number(p.units_per_pack) : null,
         comparable_base_unit: p.comparable_base_unit ?? null,
         comparable_group: p.comparable_group_id
           ? {
@@ -171,15 +172,29 @@ export async function PATCH(
     }
 
     const parsed = UpdateProductSchema.safeParse(body)
-    if (!parsed.success || parsed.data.brand === undefined) {
+    if (!parsed.success || (parsed.data.brand === undefined && parsed.data.units_per_pack === undefined)) {
       return Response.json({ error: 'Invalid request', details: parsed.success ? undefined : parsed.error.flatten() }, { status: 400 })
     }
 
+    const setClauses: string[] = []
+    const values: unknown[] = []
+    let idx = 1
+
+    if (parsed.data.brand !== undefined) {
+      setClauses.push(`brand = $${idx++}`)
+      values.push(parsed.data.brand)
+    }
+    if (parsed.data.units_per_pack !== undefined) {
+      setClauses.push(`units_per_pack = $${idx++}`)
+      values.push(parsed.data.units_per_pack)
+    }
+
+    values.push(productId, userId)
     const client = await getPool().connect()
     try {
       const result = await client.query(
-        `UPDATE products SET brand = $1 WHERE id = $2 AND user_id = $3 RETURNING id, brand`,
-        [parsed.data.brand, productId, userId]
+        `UPDATE products SET ${setClauses.join(', ')} WHERE id = $${idx++} AND user_id = $${idx} RETURNING id, brand, units_per_pack`,
+        values
       )
       if (result.rows.length === 0) {
         return Response.json({ error: 'Product not found' }, { status: 404 })

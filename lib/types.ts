@@ -66,6 +66,7 @@ export type ProductPriceHistory = {
   product_name: string
   category: string | null
   brand: string | null
+  units_per_pack: number | null
   comparable_base_unit: ComparableBaseUnit | null
   comparable_group: {
     id: number

@@ -13,7 +13,8 @@ export async function backfillComparablePricingForProduct(
   client: PoolClient,
   productId: number,
   userId: string,
-  groupBaseUnit: string
+  groupBaseUnit: string,
+  unitsPerPack?: number | null
 ): Promise<number> {
   const { rows } = await client.query<RawItem>(
     `
@@ -29,12 +30,36 @@ export async function backfillComparablePricingForProduct(
   let updated = 0
 
   for (const row of rows) {
-    const pricing = buildComparablePricing({
+    const numericQty = Number(row.quantity)
+    const numericTotal = Number(row.total_price)
+    const numericUnit = Number(row.unit_price)
+
+    let pricing = buildComparablePricing({
       description: row.raw_description,
-      unit_price: Number(row.unit_price),
-      total_price: Number(row.total_price),
-      quantity: Number(row.quantity),
+      unit_price: numericUnit,
+      total_price: numericTotal,
+      quantity: numericQty,
     })
+
+    if (
+      (pricing.comparable_unit_price === null || pricing.comparable_base_unit !== groupBaseUnit) &&
+      groupBaseUnit === 'un' &&
+      unitsPerPack != null && unitsPerPack > 0
+    ) {
+      const totalUnits = unitsPerPack * (Number.isInteger(numericQty) && numericQty > 1 ? numericQty : 1)
+      const unitPrice = Math.round((numericTotal / totalUnits) * 10000) / 10000
+      pricing = {
+        original_quantity: unitsPerPack,
+        original_unit: 'un',
+        comparable_base_unit: 'un',
+        comparable_quantity_base: unitsPerPack,
+        comparable_unit_price: unitPrice,
+        measurement_source: 'description',
+        measurement_confidence: 0.7,
+        is_comparable: true,
+        is_scale_item: false,
+      }
+    }
 
     if (
       pricing.comparable_unit_price === null ||

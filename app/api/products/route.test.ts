@@ -38,25 +38,24 @@ describe('GET /api/products', () => {
 
   it('returns filtered products for the requested period', async () => {
     const client = createClient(async (queryText, params) => {
-      if (queryText.includes('FROM products p') && queryText.includes('HAVING COUNT(ii.id) FILTER')) {
+      if (queryText.includes('HAVING COUNT(ii.id) FILTER')) {
         expect(params).toEqual(['user-1', 'leite', '%leite%', 30, ''])
         return {
           rows: [
             {
-              id: 11,
-              normalized_name: 'leite integral',
-              category: 'Laticinios',
-              avg_price: '6.49',
-              purchase_count: '4',
-              last_purchase: '2026-04-10',
+              products: [
+                {
+                  id: 11,
+                  normalized_name: 'leite integral',
+                  category: 'Laticinios',
+                  avg_price: '6.49',
+                  purchase_count: '4',
+                  last_purchase: '2026-04-10',
+                },
+              ],
+              categories: ['Laticinios'],
             },
           ],
-        }
-      }
-
-      if (queryText.includes('SELECT DISTINCT category')) {
-        return {
-          rows: [{ category: 'Laticinios' }],
         }
       }
 
@@ -86,27 +85,26 @@ describe('GET /api/products', () => {
 
   it('preserves broad product search when period_days is omitted', async () => {
     const client = createClient(async (queryText, params) => {
-      if (queryText.includes('FROM products p') && queryText.includes('HAVING COUNT(ii.id) FILTER')) {
+      if (queryText.includes('HAVING COUNT(ii.id) FILTER')) {
         expect(params).toEqual(['user-1', 'arroz', '%arroz%', null, ''])
         expect(queryText).toContain('WHERE $4::int IS NULL OR i.purchase_date >= CURRENT_DATE - ($4::int * INTERVAL \'1 day\')')
 
         return {
           rows: [
             {
-              id: 21,
-              normalized_name: 'arroz integral',
-              category: 'Mercearia',
-              avg_price: '24.90',
-              purchase_count: '2',
-              last_purchase: '2025-12-01',
+              products: [
+                {
+                  id: 21,
+                  normalized_name: 'arroz integral',
+                  category: 'Mercearia',
+                  avg_price: '24.90',
+                  purchase_count: '2',
+                  last_purchase: '2025-12-01',
+                },
+              ],
+              categories: ['Mercearia'],
             },
           ],
-        }
-      }
-
-      if (queryText.includes('SELECT DISTINCT category')) {
-        return {
-          rows: [{ category: 'Mercearia' }],
         }
       }
 

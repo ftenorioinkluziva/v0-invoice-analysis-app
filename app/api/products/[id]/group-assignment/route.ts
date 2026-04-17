@@ -11,12 +11,13 @@ import {
 type ProductRow = {
   id: number
   comparable_group_id: number | null
+  units_per_pack: number | null
 }
 
 type GroupRow = {
   id: number
   display_name: string
-  base_unit: 'kg' | 'L'
+  base_unit: 'kg' | 'L' | 'un'
 }
 
 export async function POST(
@@ -109,7 +110,7 @@ export async function POST(
         [group.id, product.id, userId]
       )
 
-      await backfillComparablePricingForProduct(client, product.id, userId, group.base_unit)
+      await backfillComparablePricingForProduct(client, product.id, userId, group.base_unit, product.units_per_pack)
 
       await client.query(
         `
@@ -213,7 +214,7 @@ export async function DELETE(
 async function getProduct(client: PoolClient, productId: number, userId: string) {
   const result = await client.query<ProductRow>(
     `
-      SELECT id, comparable_group_id
+      SELECT id, comparable_group_id, units_per_pack
       FROM products
       WHERE id = $1 AND user_id = $2
       LIMIT 1

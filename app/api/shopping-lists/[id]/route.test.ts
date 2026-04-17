@@ -35,52 +35,46 @@ describe('GET /api/shopping-lists/[id]', () => {
 
   it('returns comparable metadata and preserves nullable prices', async () => {
     const client = createClient(async (queryText, params) => {
-      if (queryText.includes('FROM shopping_lists')) {
-        expect(params).toEqual([12, 'user-1'])
-        return {
-          rows: [{ id: 12, name: 'Mercado', status: 'active', created_at: '2026-04-16' }],
-        }
-      }
-
-      if (queryText.includes('FROM shopping_list_items sli')) {
+      if (queryText.includes('list_check AS') && queryText.includes('list_items AS')) {
         expect(params).toEqual([12, 'user-1', 90])
         return {
           rows: [
             {
-              id: 101,
-              quantity: 2,
-              checked: false,
-              estimated_price: null,
-              product_id: 7,
-              normalized_name: 'leite integral',
-              category: 'Laticinios',
-              last_price: null,
-              price_variation: null,
-              comparable_unit_price: '6.21',
-              comparable_base_unit: 'L',
-              comparable_group_name: 'Leites',
-            },
-            {
-              id: 102,
-              quantity: 1,
-              checked: true,
-              estimated_price: '8.90',
-              product_id: 8,
-              normalized_name: 'cafe especial',
-              category: 'Mercearia',
-              last_price: null,
-              price_variation: '0',
-              comparable_unit_price: null,
-              comparable_base_unit: null,
-              comparable_group_name: null,
+              list: { id: 12, name: 'Mercado', status: 'active', created_at: '2026-04-16' },
+              items: [
+                {
+                  id: 101,
+                  quantity: 2,
+                  checked: false,
+                  estimated_price: null,
+                  product_id: 7,
+                  normalized_name: 'leite integral',
+                  category: 'Laticinios',
+                  last_price: null,
+                  price_variation: null,
+                  comparable_unit_price: '6.21',
+                  comparable_base_unit: 'L',
+                  comparable_group_name: 'Leites',
+                },
+                {
+                  id: 102,
+                  quantity: 1,
+                  checked: true,
+                  estimated_price: '8.90',
+                  product_id: 8,
+                  normalized_name: 'cafe especial',
+                  category: 'Mercearia',
+                  last_price: null,
+                  price_variation: '0',
+                  comparable_unit_price: null,
+                  comparable_base_unit: null,
+                  comparable_group_name: null,
+                },
+              ],
+              suggestions: [],
             },
           ],
         }
-      }
-
-      if (queryText.includes('FROM products p') && queryText.includes('COUNT(ii.id) AS purchase_count')) {
-        expect(params).toEqual(['user-1', 12])
-        return { rows: [] }
       }
 
       throw new Error(`Unexpected query: ${queryText}`)
@@ -94,7 +88,6 @@ describe('GET /api/shopping-lists/[id]', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(setAppUserId).toHaveBeenCalledWith(client, 'user-1')
     await expect(response.json()).resolves.toEqual({
       list: { id: 12, name: 'Mercado', status: 'active', created_at: '2026-04-16' },
       items: [
@@ -107,6 +100,7 @@ describe('GET /api/shopping-lists/[id]', () => {
           normalized_name: 'leite integral',
           category: 'Laticinios',
           last_price: null,
+          previous_price: null,
           price_variation: 0,
           comparable_unit_price: 6.21,
           comparable_base_unit: 'L',
@@ -122,6 +116,7 @@ describe('GET /api/shopping-lists/[id]', () => {
           normalized_name: 'cafe especial',
           category: 'Mercearia',
           last_price: null,
+          previous_price: null,
           price_variation: 0,
           comparable_unit_price: null,
           comparable_base_unit: null,

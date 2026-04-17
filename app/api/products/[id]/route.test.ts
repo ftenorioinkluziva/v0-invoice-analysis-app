@@ -38,7 +38,7 @@ describe('PATCH /api/products/[id]', () => {
     const client = createClient(async (queryText, params) => {
       if (queryText.includes('UPDATE products')) {
         expect(params).toEqual(['Marca Boa', 12, 'user-1'])
-        return { rows: [{ id: 12, brand: 'Marca Boa' }] }
+        return { rows: [{ id: 12, brand: 'Marca Boa', units_per_pack: null }] }
       }
 
       throw new Error(`Unexpected query: ${queryText}`)
@@ -57,7 +57,33 @@ describe('PATCH /api/products/[id]', () => {
     )
 
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({ id: 12, brand: 'Marca Boa' })
+    await expect(response.json()).resolves.toEqual({ id: 12, brand: 'Marca Boa', units_per_pack: null })
+  })
+
+  it('updates units_per_pack independently of brand', async () => {
+    const client = createClient(async (queryText, params) => {
+      if (queryText.includes('UPDATE products')) {
+        expect(params).toEqual([10, 12, 'user-1'])
+        return { rows: [{ id: 12, brand: null, units_per_pack: 10 }] }
+      }
+
+      throw new Error(`Unexpected query: ${queryText}`)
+    })
+
+    connect.mockResolvedValue(client)
+
+    const { PATCH } = await import('./route')
+    const response = await PATCH(
+      new Request('http://localhost/api/products/12', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ units_per_pack: 10 }),
+      }),
+      { params: Promise.resolve({ id: '12' }) }
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ id: 12, brand: null, units_per_pack: 10 })
   })
 
   it('returns 400 for invalid payloads', async () => {
@@ -97,44 +123,39 @@ describe('GET /api/products/[id]', () => {
 
   it('returns history scoped to the requested period', async () => {
     const client = createClient(async (queryText, params) => {
-      if (queryText.includes('FROM products') && queryText.includes('LEFT JOIN product_groups pg')) {
-        expect(params).toEqual([12, 'user-1'])
-        return {
-          rows: [
-            {
-              id: 12,
-              normalized_name: 'leite integral',
-              category: 'Laticinios',
-              brand: 'Marca Boa',
-              comparable_base_unit: 'L',
-              comparable_group_id: 7,
-              comparable_group_display_name: 'Leites',
-              comparable_group_base_unit: 'L',
-            },
-          ],
-        }
-      }
-
-      if (queryText.includes('FROM invoice_items ii') && queryText.includes('LIMIT 20')) {
+      if (queryText.includes('product_row AS') && queryText.includes('price_history AS')) {
         expect(params).toEqual([12, 'user-1', 30])
         return {
           rows: [
             {
-              price: '6.89',
-              raw_description: 'Leite Integral 1L',
-              date: '2026-04-10',
-              store_name: 'Mercado Bom',
+              product: {
+                id: 12,
+                normalized_name: 'leite integral',
+                category: 'Laticinios',
+                brand: 'Marca Boa',
+                units_per_pack: null,
+                comparable_base_unit: 'L',
+                comparable_group_id: 7,
+                comparable_group_display_name: 'Leites',
+                comparable_group_base_unit: 'L',
+              },
+              prices: [
+                {
+                  price: '6.89',
+                  raw_description: 'Leite Integral 1L',
+                  date: '2026-04-10',
+                  store_name: 'Mercado Bom',
+                },
+              ],
+              stats: {
+                avg_price: '6.49',
+                min_price: '5.99',
+                max_price: '6.89',
+                variation: '15.2',
+              },
             },
           ],
         }
-      }
-
-      if (queryText.includes('AVG(ii.unit_price) AS avg_price')) {
-        return { rows: [{ avg_price: '6.49', min_price: '5.99', max_price: '6.89' }] }
-      }
-
-      if (queryText.includes('WITH filtered_prices AS')) {
-        return { rows: [{ variation: '15.2' }] }
       }
 
       throw new Error(`Unexpected query: ${queryText}`)
@@ -154,6 +175,7 @@ describe('GET /api/products/[id]', () => {
       product_name: 'leite integral',
       category: 'Laticinios',
       brand: 'Marca Boa',
+      units_per_pack: null,
       comparable_base_unit: 'L',
       comparable_group: {
         id: 7,

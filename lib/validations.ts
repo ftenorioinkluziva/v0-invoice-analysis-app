@@ -67,6 +67,7 @@ export const UpdateProductGroupSchema = z.object({
 
 export const UpdateProductSchema = z.object({
   brand: BrandSchema.optional(),
+  units_per_pack: z.number().int().positive().nullable().optional(),
 })
 
 export const AssignProductGroupSchema = z.object({
@@ -83,6 +84,7 @@ export const ProductGroupResponseSchema = z.object({
 export const ProductResponseSchema = z.object({
   id: z.number().int().positive(),
   brand: z.string().nullable(),
+  units_per_pack: z.number().int().positive().nullable(),
 })
 
 export const ProductGroupAssignmentResponseSchema = z.object({

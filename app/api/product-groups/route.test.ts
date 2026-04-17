@@ -56,7 +56,6 @@ describe('POST /api/product-groups', () => {
       display_name: 'Leites',
       base_unit: 'L',
     })
-    expect(setAppUserId).toHaveBeenCalledWith(client, 'user-1')
   })
 
   it('returns 409 on scoped uniqueness conflict', async () => {

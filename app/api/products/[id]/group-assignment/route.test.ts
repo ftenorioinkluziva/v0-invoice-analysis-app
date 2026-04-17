@@ -31,7 +31,7 @@ describe('/api/products/[id]/group-assignment', () => {
   it('associates the product when evidence is missing but explicitly allowed', async () => {
     const client = createClient(async (queryText, params) => {
       if (queryText.includes('SELECT id, comparable_group_id') && queryText.includes('FROM products')) {
-        return { rows: [{ id: 7, comparable_group_id: null }] }
+        return { rows: [{ id: 7, comparable_group_id: null, units_per_pack: null }] }
       }
 
       if (queryText.includes('SELECT id, display_name, base_unit') && queryText.includes('FROM product_groups')) {
@@ -39,6 +39,10 @@ describe('/api/products/[id]/group-assignment', () => {
       }
 
       if (queryText.includes('SELECT ii.comparable_base_unit')) {
+        return { rows: [] }
+      }
+
+      if (queryText.includes('comparable_unit_price IS NULL')) {
         return { rows: [] }
       }
 

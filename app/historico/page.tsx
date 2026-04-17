@@ -69,9 +69,10 @@ type ComparableGroupsResponse = {
 }
 
 type ViewMode = 'products' | 'comparable'
-type PeriodDays = '30' | '90' | '180'
+type PeriodDays = '30' | '90' | '180' | 'all'
 
 const PERIOD_OPTIONS: { value: PeriodDays; label: string }[] = [
+  { value: 'all', label: 'Todos' },
   { value: '30', label: '30 dias' },
   { value: '90', label: '90 dias' },
   { value: '180', label: '180 dias' },
@@ -90,6 +91,8 @@ export default function HistoricoPage() {
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupBaseUnit, setNewGroupBaseUnit] = useState<ComparableBaseUnit>('kg')
   const [isMutatingGroup, setIsMutatingGroup] = useState(false)
+  const [unitsPerPackInput, setUnitsPerPackInput] = useState('')
+  const [isSavingUnitsPerPack, setIsSavingUnitsPerPack] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -100,8 +103,9 @@ export default function HistoricoPage() {
   }, [searchQuery])
 
   const categoryParam = selectedCategory === 'all' ? '' : selectedCategory
-  const productsUrl = `/api/products?search=${encodeURIComponent(debouncedSearchQuery)}&category=${encodeURIComponent(categoryParam)}&period_days=${periodDays}`
-  const comparableGroupsUrl = `/api/product-groups?view=comparable&search=${encodeURIComponent(debouncedSearchQuery)}&period_days=${periodDays}`
+  const periodParam = periodDays === 'all' ? '' : `&period_days=${periodDays}`
+  const productsUrl = `/api/products?search=${encodeURIComponent(debouncedSearchQuery)}&category=${encodeURIComponent(categoryParam)}${periodParam}`
+  const comparableGroupsUrl = `/api/product-groups?view=comparable&search=${encodeURIComponent(debouncedSearchQuery)}${periodParam}`
 
   const {
     data: productsData,
@@ -123,7 +127,7 @@ export default function HistoricoPage() {
     error: productHistoryError,
     mutate: mutateProductHistory,
   } = useSWR<ProductPriceHistory>(
-    selectedProductId ? `/api/products/${selectedProductId}?period_days=${periodDays}` : null,
+    selectedProductId ? `/api/products/${selectedProductId}${periodDays === 'all' ? '' : `?period_days=${periodDays}`}` : null,
     fetchJsonWithAuthRedirect
   )
 
@@ -132,7 +136,7 @@ export default function HistoricoPage() {
     error: comparableGroupHistoryError,
     mutate: mutateComparableGroupHistory,
   } = useSWR<ComparableGroupHistory>(
-    selectedGroupId ? `/api/product-groups/${selectedGroupId}/history?period_days=${periodDays}` : null,
+    selectedGroupId ? `/api/product-groups/${selectedGroupId}/history${periodDays === 'all' ? '' : `?period_days=${periodDays}`}` : null,
     fetchJsonWithAuthRedirect
   )
 
@@ -153,6 +157,12 @@ export default function HistoricoPage() {
     error: assignableGroupsError,
     mutate: mutateAssignableGroups,
   } = useSWR<ComparableGroupsResponse>(assignableGroupsUrl, fetchJsonWithAuthRedirect)
+
+  useEffect(() => {
+    if (productHistory?.units_per_pack != null) {
+      setUnitsPerPackInput(String(productHistory.units_per_pack))
+    }
+  }, [productHistory?.units_per_pack])
 
   const displayedProducts = (() => {
     const list = productsData?.products ?? []
@@ -208,6 +218,29 @@ export default function HistoricoPage() {
     setGroupSearchQuery('')
     setNewGroupName('')
     setNewGroupBaseUnit('kg')
+    setUnitsPerPackInput('')
+  }
+
+  const handleSaveUnitsPerPack = async () => {
+    if (!selectedProductId) return
+
+    const parsed = parseInt(unitsPerPackInput, 10)
+    const value = Number.isFinite(parsed) && parsed > 0 ? parsed : null
+
+    setIsSavingUnitsPerPack(true)
+    try {
+      await fetchJsonWithAuthRedirect(`/api/products/${selectedProductId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ units_per_pack: value }),
+      })
+      await mutateProductHistory(true)
+      toast({ title: 'Unidades por embalagem salvo' })
+    } catch (error) {
+      toast({ title: 'Erro ao salvar', description: getErrorMessage(error), variant: 'destructive' })
+    } finally {
+      setIsSavingUnitsPerPack(false)
+    }
   }
 
   const handleAssignGroup = async (groupId: number) => {
@@ -572,6 +605,41 @@ export default function HistoricoPage() {
             ) : null}
           </CardContent>
         </Card>
+
+        {(productHistory.comparable_group?.base_unit === 'un' || productHistory.comparable_base_unit === 'un') ? (
+          <Card className="bg-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Package className="h-4 w-4 text-muted-foreground" />
+                Unidades por embalagem
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-3 text-xs text-muted-foreground">
+                Informe quantas unidades tem esta embalagem para calcular o preco por unidade.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={unitsPerPackInput}
+                  onChange={(e) => setUnitsPerPackInput(e.target.value)}
+                  placeholder="Ex.: 10"
+                  className="w-28 bg-background"
+                />
+                <Button
+                  type="button"
+                  onClick={handleSaveUnitsPerPack}
+                  disabled={isSavingUnitsPerPack}
+                >
+                  {isSavingUnitsPerPack ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+                  Salvar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-3">
           <Card className="bg-card">
