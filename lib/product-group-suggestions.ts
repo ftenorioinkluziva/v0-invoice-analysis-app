@@ -5,7 +5,7 @@ export const PRODUCT_GROUP_SUGGESTION_THRESHOLD = 0.75
 const REJECTED_SCORE_DELTA_THRESHOLD = 0.15
 const UNIT_TOKENS = new Set(['kg', 'g', 'l', 'lt', 'ml'])
 
-type ComparableBaseUnit = 'kg' | 'L'
+type ComparableBaseUnit = 'kg' | 'L' | 'un'
 type SuggestionStatus = 'pending' | 'accepted' | 'rejected' | 'superseded'
 
 type SourceProductRow = {

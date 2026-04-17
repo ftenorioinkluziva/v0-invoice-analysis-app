@@ -200,10 +200,19 @@ describe('Comparable catalog schemas', () => {
     expect(result.success).toBe(true)
   })
 
+  it('should accept un as comparable base unit', () => {
+    const result = CreateProductGroupSchema.safeParse({
+      display_name: 'Capsulas Cafe',
+      base_unit: 'un',
+    })
+
+    expect(result.success).toBe(true)
+  })
+
   it('should reject invalid comparable base units', () => {
     const result = CreateProductGroupSchema.safeParse({
       display_name: 'Leites',
-      base_unit: 'un',
+      base_unit: 'oz',
     })
 
     expect(result.success).toBe(false)

@@ -258,8 +258,21 @@ describe('parseComparableMeasurement', () => {
     })
   })
 
-  it('should keep count-only packages as non comparable', () => {
+  it('should parse unit count as comparable per unit', () => {
     expect(parseComparableMeasurement('cx 12 un')).toEqual({
+      original_quantity: 12,
+      original_unit: 'un',
+      comparable_base_unit: 'un',
+      comparable_quantity_base: 12,
+      measurement_source: 'description',
+      measurement_confidence: 0.85,
+      is_comparable: true,
+      is_scale_item: false,
+    })
+  })
+
+  it('should keep count-only packages without unit count as non comparable', () => {
+    expect(parseComparableMeasurement('caixa biscoito pacote')).toEqual({
       original_quantity: null,
       original_unit: null,
       comparable_base_unit: null,

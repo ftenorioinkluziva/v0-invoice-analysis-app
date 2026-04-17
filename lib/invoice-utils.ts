@@ -3,7 +3,7 @@ import type { ComparableBaseUnit, ComparableMeasurement, ComparablePricing, Meas
 type ItemInput = { description: string; quantity: number; unit_price: number; total_price: number }
 type ParsedMeasurement = {
   original_quantity: number | null
-  original_unit: 'g' | 'kg' | 'ml' | 'L' | null
+  original_unit: 'g' | 'kg' | 'ml' | 'L' | 'un' | null
   comparable_base_unit: ComparableBaseUnit | null
   comparable_quantity_base: number | null
   measurement_source: MeasurementSource
@@ -15,7 +15,8 @@ const UNIT_WORDS = new Set(['kg', 'ml', 'lt', 'g', 'gr', 'pc', 'pct', 'cx'])
 const SIMPLE_MEASUREMENT_REGEX = /(\d+[,.]?\d*)\s*(kg|gr|g|ml|lt|l)\b/i
 const MULTIPACK_MEASUREMENT_REGEX = /(\d+)\s*[x×]\s*(\d+[,.]?\d*)\s*(kg|gr|g|ml|lt|l)\b/i
 const COUNT_WITH_MEASUREMENT_REGEX = /(\d+)\s*(?:un|und|unid|unidades?)\s*(\d+[,.]?\d*)\s*(kg|gr|g|ml|lt|l)\b/i
-const COUNT_ONLY_REGEX = /\b(?:cx|caixa|pct|pacote|pc|un|und|unid)\s*\d+\s*(?:un|und|unid|unidades?)?\b/i
+const UNIT_COUNT_REGEX = /\b(\d+)\s*(?:un|und|unid|unidades?)\b/i
+const COUNT_ONLY_REGEX = /\b(?:cx|caixa|pct|pacote|pc)\b/i
 
 export function validateItemPrices(item: ItemInput): ItemInput {
   const { quantity, unit_price, total_price } = item
@@ -138,6 +139,21 @@ export function parseComparableMeasurement(description: string): ComparableMeasu
         comparable_quantity_base: normalizeToBaseUnit(quantity, unit),
         measurement_source: 'description',
         measurement_confidence: 0.95,
+      })
+    }
+  }
+
+  const unitCountMatch = normalizedDescription.match(UNIT_COUNT_REGEX)
+  if (unitCountMatch) {
+    const count = parseDecimal(unitCountMatch[1])
+    if (count !== null && count > 0) {
+      return finalizeMeasurement({
+        original_quantity: count,
+        original_unit: 'un',
+        comparable_base_unit: 'un',
+        comparable_quantity_base: count,
+        measurement_source: 'description',
+        measurement_confidence: 0.85,
       })
     }
   }
@@ -278,7 +294,7 @@ function normalizeMeasurementText(description: string): string {
     .toLowerCase()
     .replace(/[–—]/g, '-')
     .replace(/\s*[+]+\s*/g, ' + ')
-    .replace(/\s*[x×]\s*/g, 'x')
+    .replace(/(?<=\d)\s*[x×]\s*(?=\d)/g, 'x')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -296,18 +312,22 @@ function normalizeMeasurementUnit(unit: string): ParsedMeasurement['original_uni
   if (normalized === 'kg') return 'kg'
   if (normalized === 'ml') return 'ml'
   if (normalized === 'l' || normalized === 'lt') return 'L'
+  if (normalized === 'un' || normalized === 'und' || normalized === 'unid') return 'un'
 
   return null
 }
 
 function toComparableBaseUnit(unit: NonNullable<ParsedMeasurement['original_unit']>): ComparableBaseUnit {
-  return unit === 'g' || unit === 'kg' ? 'kg' : 'L'
+  if (unit === 'g' || unit === 'kg') return 'kg'
+  if (unit === 'un') return 'un'
+  return 'L'
 }
 
 function normalizeToBaseUnit(quantity: number, unit: NonNullable<ParsedMeasurement['original_unit']>): number {
   if (unit === 'g') return roundMeasurement(quantity / 1000)
   if (unit === 'kg') return roundMeasurement(quantity)
   if (unit === 'ml') return roundMeasurement(quantity / 1000)
+  if (unit === 'un') return roundMeasurement(quantity)
   return roundMeasurement(quantity)
 }
 

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const ComparableBaseUnitSchema = z.enum(['kg', 'L'])
+export const ComparableBaseUnitSchema = z.enum(['kg', 'L', 'un'])
 export const MeasurementSourceSchema = z.enum(['description', 'scale_item', 'rule_inference'])
 
 export const InvoiceItemSchema = z.object({
@@ -27,7 +27,7 @@ export type MeasurementSource = z.infer<typeof MeasurementSourceSchema>
 
 export type ComparableMeasurement = {
   original_quantity: number | null
-  original_unit: 'g' | 'kg' | 'ml' | 'L' | null
+  original_unit: 'g' | 'kg' | 'ml' | 'L' | 'un' | null
   comparable_base_unit: ComparableBaseUnit | null
   comparable_quantity_base: number | null
   measurement_source: MeasurementSource

@@ -24,7 +24,7 @@ export type ProductGroup = {
   id: number
   user_id: string
   display_name: string
-  base_unit: 'kg' | 'L'
+  base_unit: 'kg' | 'L' | 'un'
   created_at: Date
   updated_at: Date
 }
@@ -73,7 +73,7 @@ export type InvoiceItem = {
   quantity: number
   unit_price: number
   total_price: number
-  comparable_base_unit: 'kg' | 'L' | null
+  comparable_base_unit: 'kg' | 'L' | 'un' | null
   comparable_quantity_base: number | null
   comparable_unit_price: number | null
   measurement_source: 'description' | 'scale_item' | 'rule_inference' | null
