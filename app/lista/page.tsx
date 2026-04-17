@@ -588,9 +588,10 @@ export default function ListaPage() {
                         <div className="flex items-center justify-between gap-2">
                           <p
                             className={cn(
-                              'truncate text-sm font-semibold capitalize leading-tight transition-all duration-200',
+                              'line-clamp-2 break-words text-sm font-semibold capitalize leading-tight transition-all duration-200',
                               item.checked && 'line-through text-muted-foreground'
                             )}
+                            title={item.normalized_name}
                           >
                             {item.normalized_name}
                           </p>
@@ -627,21 +628,32 @@ export default function ListaPage() {
                             </span>
                           )}
                           {item.price_variation !== 0 && (
-                            <span
-                              className={cn(
-                                'inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-semibold',
-                                item.price_variation > 0
-                                  ? 'bg-destructive/10 text-destructive'
-                                  : 'bg-success/10 text-success'
-                              )}
-                            >
-                              {item.price_variation > 0 ? (
-                                <TrendingUp className="h-3 w-3" />
-                              ) : (
-                                <TrendingDown className="h-3 w-3" />
-                              )}
-                              {Math.abs(item.price_variation).toFixed(0)}%
-                            </span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <span
+                                  className={cn(
+                                    'inline-flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-semibold',
+                                    item.price_variation > 0
+                                      ? 'bg-destructive/10 text-destructive'
+                                      : 'bg-success/10 text-success'
+                                  )}
+                                  tabIndex={0}
+                                >
+                                  {item.price_variation > 0 ? (
+                                    <TrendingUp className="h-3 w-3" />
+                                  ) : (
+                                    <TrendingDown className="h-3 w-3" />
+                                  )}
+                                  {Math.abs(item.price_variation).toFixed(0)}%
+                                </span>
+                              </PopoverTrigger>
+                              <PopoverContent side="top" className="w-64 p-3 text-xs">
+                                <p className="font-semibold text-foreground">Variação de preço</p>
+                                <p className="mt-1 text-muted-foreground">
+                                  Indica a diferença percentual do preço deste item em relação à última compra registrada. Valores positivos mostram aumento, negativos mostram redução.
+                                </p>
+                              </PopoverContent>
+                            </Popover>
                           )}
                         </div>
 
