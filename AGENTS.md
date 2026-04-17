@@ -1,65 +1,73 @@
-# AGENTS.md - Synkra AIOX (Codex CLI)
+# AGENTS.md - NoteWise (v0 Invoice Analysis App)
 
-Este arquivo define as instrucoes do projeto para o Codex CLI.
+## Project Structure
 
-<!-- AIOX-MANAGED-START: core -->
-## Core Rules
+Single Next.js 16 app (not a monorepo). Key directories:
+- `app/` — Next.js App Router pages
+- `lib/` — Database client, types, validation schemas, utilities
+- `components/` — UI components (shadcn/ui + custom)
+- `e2e/` — Playwright E2E tests
+- `docs/` — Stories and development guides
 
-1. Siga a Constitution em `.aiox-core/constitution.md`
-2. Priorize `CLI First -> Observability Second -> UI Third`
-3. Trabalhe por stories em `docs/stories/`
-4. Nao invente requisitos fora dos artefatos existentes
-<!-- AIOX-MANAGED-END: core -->
+## Commands
 
-<!-- AIOX-MANAGED-START: quality -->
+```bash
+npm run dev          # Start dev server at localhost:3000
+npm run build        # Production build
+npm run lint         # ESLint
+npx tsc --noEmit   # TypeScript check (no build)
+npm test             # Vitest unit tests
+npm run test:watch   # Vitest watch mode
+npm run test:e2e    # Playwright E2E tests
+npm run test:e2e:ui # Playwright E2E UI
+```
+
 ## Quality Gates
 
-- Rode `npm run lint`
-- Rode `npm run typecheck`
-- Rode `npm test`
-- Atualize checklist e file list da story antes de concluir
-<!-- AIOX-MANAGED-END: quality -->
+Run in order before marking tasks complete:
+1. `npm run lint`
+2. `npx tsc --noEmit`
+3. `npm test`
 
-<!-- AIOX-MANAGED-START: codebase -->
-## Project Map
+## Environment Variables
 
-- Core framework: `.aiox-core/`
-- CLI entrypoints: `bin/`
-- Shared packages: `packages/`
-- Tests: `tests/`
-- Docs: `docs/`
-<!-- AIOX-MANAGED-END: codebase -->
+```bash
+DATABASE_URL="postgresql://..."              # Neon Postgres (required)
+GOOGLE_GENERATIVE_AI_API_KEY="..."          # AI extraction (Gemini 2.5 Flash)
+BETTER_AUTH_SECRET="..."                    # Auth sessions
+GOOGLE_CLIENT_ID="..."                      # OAuth (optional)
+GOOGLE_CLIENT_SECRET="..."                  # OAuth (optional)
+```
 
-<!-- AIOX-MANAGED-START: commands -->
-## Common Commands
+## Key Architecture Facts
 
-- `npm run sync:ide`
-- `npm run sync:ide:check`
-- `npm run sync:skills:codex`
-- `npm run sync:skills:codex:global` (opcional; neste repo o padrao e local-first)
-- `npm run validate:structure`
-- `npm run validate:agents`
-<!-- AIOX-MANAGED-END: commands -->
+- **No ORM** — Raw SQL via `@neondatabase/serverless` tagged templates
+- **AI Extraction** — Uses `ai` SDK with `Output.object(ExtractedInvoiceSchema)` for structured extraction
+- **Auth** — Better-auth v1 with email/password + Google OAuth
+- **RLS** — Strict `app.user_id` isolation; all protected routes call `setAppUserId(userId)` before queries
+- **Language** — Portuguese (pt-BR); all UI strings should be in Portuguese
+- **Monetary** — BRL only; use `Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })`
 
-<!-- AIOX-MANAGED-START: shortcuts -->
-## Agent Shortcuts
+## Where Business Logic Lives
 
-Preferencia de ativacao no Codex CLI:
-1. Use `/skills` e selecione `aiox-<agent-id>` vindo de `.codex/skills` (ex.: `aiox-architect`)
-2. Se preferir, use os atalhos abaixo (`@architect`, `/architect`, etc.)
+- `lib/invoice-utils.ts` — Product normalization, categorization, unit extraction, price validation
+- `lib/types.ts` — Zod schemas for AI extraction contract
+- `lib/validations.ts` — API request validation schemas
 
-Interprete os atalhos abaixo carregando o arquivo correspondente em `.aiox-core/development/agents/` (fallback: `.codex/agents/`), renderize o greeting via `generate-greeting.js` e assuma a persona ate `*exit`:
+## Protected Route Pattern
 
-- `@architect`, `/architect`, `/architect.md` -> `.aiox-core/development/agents/architect.md`
-- `@dev`, `/dev`, `/dev.md` -> `.aiox-core/development/agents/dev.md`
-- `@qa`, `/qa`, `/qa.md` -> `.aiox-core/development/agents/qa.md`
-- `@pm`, `/pm`, `/pm.md` -> `.aiox-core/development/agents/pm.md`
-- `@po`, `/po`, `/po.md` -> `.aiox-core/development/agents/po.md`
-- `@sm`, `/sm`, `/sm.md` -> `.aiox-core/development/agents/sm.md`
-- `@analyst`, `/analyst`, `/analyst.md` -> `.aiox-core/development/agents/analyst.md`
-- `@devops`, `/devops`, `/devops.md` -> `.aiox-core/development/agents/devops.md`
-- `@data-engineer`, `/data-engineer`, `/data-engineer.md` -> `.aiox-core/development/agents/data-engineer.md`
-- `@ux-design-expert`, `/ux-design-expert`, `/ux-design-expert.md` -> `.aiox-core/development/agents/ux-design-expert.md`
-- `@squad-creator`, `/squad-creator`, `/squad-creator.md` -> `.aiox-core/development/agents/squad-creator.md`
-- `@aiox-master`, `/aiox-master`, `/aiox-master.md` -> `.aiox-core/development/agents/aiox-master.md`
-<!-- AIOX-MANAGED-END: shortcuts -->
+```typescript
+import { getSessionUserId } from '@/lib/auth-session'
+import { setAppUserId } from '@/lib/session-sql'
+
+export async function GET(request: Request) {
+  const userId = await getSessionUserId(request)
+  setAppUserId(userId)
+  // ... queries with RLS isolation
+}
+```
+
+## Relevant Docs
+
+- `CLAUDE.md` — Detailed architecture reference (database schema, API routes, components)
+- `README.md` — E2E test setup with environment variables

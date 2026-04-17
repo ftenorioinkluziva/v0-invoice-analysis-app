@@ -33,9 +33,15 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ErrorState } from '@/components/error-state'
 import { fetchJsonWithAuthRedirect, fetchWithAuthRedirect } from '@/lib/client-fetch'
+import {
+  getShoppingListItemComparableContext,
+  getShoppingListItemTotal,
+  getShoppingListItemUnitPrice,
+  type ShoppingListDetailItem,
+} from '@/lib/shopping-list'
 import { cn } from '@/lib/utils'
 
 type ShoppingList = {
@@ -46,18 +52,6 @@ type ShoppingList = {
   item_count: number
   checked_count: number
   estimated_total: number
-}
-
-type ListItem = {
-  id: number
-  quantity: number
-  checked: boolean
-  estimated_price: number
-  product_id: number
-  normalized_name: string
-  category: string | null
-  last_price: number
-  price_variation: number
 }
 
 type Suggestion = {
@@ -110,7 +104,7 @@ export default function ListaPage() {
 
   const { data: listDetails, error: detailsError, mutate: mutateDetails } = useSWR<{
     list: ShoppingList
-    items: ListItem[]
+    items: ShoppingListDetailItem[]
     suggestions: Suggestion[]
   }>(selectedListId ? `/api/shopping-lists/${selectedListId}` : null, fetchJsonWithAuthRedirect)
 
@@ -131,6 +125,19 @@ export default function ListaPage() {
       style: 'currency',
       currency: 'BRL',
     }).format(value)
+  }
+
+  const formatItemUnitPrice = (item: ShoppingListDetailItem) => {
+    const unitPrice = getShoppingListItemUnitPrice(item)
+    return unitPrice === null ? 'Sem preco' : `${formatCurrency(unitPrice)} ${UNIT_PRICE_SUFFIX}`
+  }
+
+  const formatComparableReference = (item: ShoppingListDetailItem) => {
+    if (item.comparable_unit_price === null || !item.comparable_base_unit) {
+      return null
+    }
+
+    return `${formatCurrency(item.comparable_unit_price)}/${item.comparable_base_unit}`
   }
 
   const handleCreateList = async () => {
@@ -165,7 +172,6 @@ export default function ListaPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ product_id: productId }),
     })
-    setSearchQuery('')
     mutateDetails()
   }
 
@@ -265,13 +271,10 @@ export default function ListaPage() {
     if (!acc[category]) acc[category] = []
     acc[category].push(item)
     return acc
-  }, {} as Record<string, ListItem[]>)
+  }, {} as Record<string, ShoppingListDetailItem[]>)
 
   const estimatedTotal =
-    listDetails?.items.reduce(
-      (sum, item) => sum + (item.last_price || item.estimated_price || 0) * item.quantity,
-      0
-    ) || 0
+    listDetails?.items.reduce((sum, item) => sum + getShoppingListItemTotal(item), 0) || 0
 
   const activeLists = listsData?.lists?.filter((l) => l.status === 'active') || []
   const completedLists = listsData?.lists?.filter((l) => l.status === 'completed') || []
@@ -420,9 +423,13 @@ export default function ListaPage() {
     )
   }
 
+  const hasFooter =
+    listDetails?.list.status !== 'completed' &&
+    (listDetails?.items?.length || customItems.length > 0)
+
   // List detail view
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className={cn('flex flex-col gap-4 p-4', hasFooter && 'pb-32')}>
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => { setSelectedListId(null); setCustomItems([]) }}>
@@ -452,30 +459,28 @@ export default function ListaPage() {
           className="bg-secondary/50"
         />
         {searchQuery && (
-          <Card className="absolute left-0 right-0 top-full z-10 mt-1 bg-card">
-            <ScrollArea className="max-h-48">
-              <div className="p-2">
-                {productsData?.products?.slice(0, 5).map((product) => (
-                  <button
-                    key={product.id}
-                    className="flex w-full items-center justify-between rounded-lg p-2 text-left transition-colors hover:bg-secondary/50"
-                    onClick={() => handleAddItem(product.id)}
-                  >
-                    <div>
-                      <p className="text-sm font-medium capitalize">{product.normalized_name}</p>
-                      <p className="text-xs text-muted-foreground">{product.category}</p>
-                    </div>
-                    <Plus className="h-4 w-4 text-primary" />
-                  </button>
-                ))}
-                {(!productsData?.products || productsData.products.length === 0) && (
-                  <p className="px-2 py-3 text-center text-sm text-muted-foreground">
-                    Nenhum produto encontrado no catálogo
-                  </p>
-                )}
-              </div>
-            </ScrollArea>
-          </Card>
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+            <div className="max-h-48 overflow-y-auto overscroll-contain p-1">
+              {productsData?.products?.slice(0, 5).map((product) => (
+                <button
+                  key={product.id}
+                  className="flex w-full items-center justify-between rounded-lg p-2.5 text-left transition-colors hover:bg-secondary/50"
+                  onClick={() => handleAddItem(product.id)}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium capitalize">{product.normalized_name}</p>
+                    <p className="text-xs text-muted-foreground">{product.category}</p>
+                  </div>
+                  <Plus className="ml-2 h-4 w-4 shrink-0 text-primary" />
+                </button>
+              ))}
+              {(!productsData?.products || productsData.products.length === 0) && (
+                <p className="px-2 py-3 text-center text-sm text-muted-foreground">
+                  Nenhum produto encontrado no catálogo
+                </p>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
@@ -535,12 +540,12 @@ export default function ListaPage() {
               {listDetails.suggestions.map((suggestion) => (
                 <button
                   key={suggestion.product_id}
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/30 px-3 py-1.5 text-sm transition-colors hover:bg-secondary"
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/20 px-2.5 py-1 text-sm transition-colors hover:border-primary/30 hover:bg-secondary"
                   onClick={() => handleAddItem(suggestion.product_id)}
                 >
-                  <Plus className="h-3 w-3 text-primary" />
-                  <span className="capitalize truncate max-w-40">{suggestion.normalized_name}</span>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  <Plus className="h-3 w-3 shrink-0 text-primary" />
+                  <span className="max-w-36 truncate capitalize">{suggestion.normalized_name}</span>
+                  <span className="shrink-0 rounded bg-secondary px-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
                     {suggestion.days_since_purchase}d
                   </span>
                 </button>
@@ -555,29 +560,42 @@ export default function ListaPage() {
         <div className="space-y-4">
           {Object.entries(groupedItems).map(([category, items]) => (
             <div key={category}>
-              <h3 className="mb-2 text-sm font-medium text-muted-foreground">{category}</h3>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">{category}</span>
+                <div className="h-px flex-1 bg-border/50" />
+              </div>
               <div className="space-y-2">
                 {items.map((item) => (
-                  <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-60')}>
+                  <Card
+                    key={item.id}
+                    className={cn(
+                      'bg-card transition-all duration-200',
+                      item.checked
+                        ? 'border-l-2 border-l-border opacity-50'
+                        : 'border-l-2 border-l-primary/40'
+                    )}
+                  >
                     <CardContent className="flex items-center gap-3 p-3">
                       <Checkbox
                         checked={item.checked}
                         onCheckedChange={(checked) =>
                           handleToggleItem(item.id, checked as boolean)
                         }
-                        className="h-5 w-5"
+                        className="h-7 w-7 shrink-0 rounded-md"
                       />
-                      <div className="flex-1 space-y-1">
+
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <div className="flex items-center justify-between gap-2">
                           <p
                             className={cn(
-                              'text-sm font-medium capitalize',
-                              item.checked && 'line-through'
+                              'line-clamp-2 break-words text-sm font-semibold capitalize leading-tight transition-all duration-200',
+                              item.checked && 'line-through text-muted-foreground'
                             )}
+                            title={item.normalized_name}
                           >
                             {item.normalized_name}
                           </p>
-                          <div className="flex items-center gap-1">
+                          <div className="flex shrink-0 items-center gap-1">
                             <Button
                               variant="outline"
                               size="icon"
@@ -602,41 +620,83 @@ export default function ListaPage() {
                             </Button>
                           </div>
                         </div>
+
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            {formatCurrency(item.last_price || item.estimated_price || 0)} {UNIT_PRICE_SUFFIX}
-                          </span>
-                          {item.price_variation !== 0 && (
-                            <span
-                              className={cn(
-                                'flex items-center gap-0.5 text-xs',
-                                item.price_variation > 0 ? 'text-destructive' : 'text-success'
-                              )}
-                            >
-                              {item.price_variation > 0 ? (
-                                <TrendingUp className="h-3 w-3" />
-                              ) : item.price_variation < 0 ? (
-                                <TrendingDown className="h-3 w-3" />
-                              ) : (
-                                <Minus className="h-3 w-3" />
-                              )}
-                              {Math.abs(item.price_variation).toFixed(0)}%
+                          {item.quantity > 1 && (
+                            <span className="text-xs text-muted-foreground">
+                              {formatItemUnitPrice(item)}
                             </span>
                           )}
+                          {item.price_variation !== 0 && (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <span
+                                  className={cn(
+                                    'inline-flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-semibold',
+                                    item.price_variation > 0
+                                      ? 'bg-destructive/10 text-destructive'
+                                      : 'bg-success/10 text-success'
+                                  )}
+                                  tabIndex={0}
+                                >
+                                  {item.price_variation > 0 ? (
+                                    <TrendingUp className="h-3 w-3" />
+                                  ) : (
+                                    <TrendingDown className="h-3 w-3" />
+                                  )}
+                                  {Math.abs(item.price_variation).toFixed(0)}%
+                                </span>
+                              </PopoverTrigger>
+                              <PopoverContent side="top" className="w-64 p-3 text-xs">
+                                <p className="font-semibold text-foreground">Variação de preço</p>
+                                <p className="mt-1 text-muted-foreground">
+                                  Indica a diferença percentual do preço deste item em relação à última compra registrada. Valores positivos mostram aumento, negativos mostram redução.
+                                </p>
+                              </PopoverContent>
+                            </Popover>
+                          )}
                         </div>
+
+                        {formatComparableReference(item) && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-xs font-semibold text-foreground">
+                              {getShoppingListItemComparableContext(item)}
+                            </span>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="shrink-0 rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+                                  {formatComparableReference(item)}
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent side="top" className="w-64 p-3 text-xs">
+                                <p className="font-semibold text-foreground">Preço de referência do grupo</p>
+                                <p className="mt-1 text-muted-foreground">
+                                  Média do preço por {item.comparable_base_unit} de todos os produtos do grupo{' '}
+                                  <span className="font-semibold text-foreground">
+                                    {item.comparable_group_name}
+                                  </span>
+                                  {' '}nos últimos 90 dias. Serve para comparar marcas e embalagens diferentes pelo mesmo peso ou volume.
+                                </p>
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-medium">
-                          {formatCurrency((item.last_price || 0) * item.quantity)}
+
+                      <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        <span className={cn(
+                          'font-mono text-base font-bold transition-all duration-200',
+                          item.checked && 'text-muted-foreground'
+                        )}>
+                          {formatCurrency(getShoppingListItemTotal(item))}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        <button
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-destructive"
                           onClick={() => handleDeleteItem(item.id)}
+                          aria-label="Remover item"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     </CardContent>
                   </Card>
@@ -667,14 +727,14 @@ export default function ListaPage() {
           <h3 className="mb-2 text-sm font-medium text-muted-foreground">Itens Avulsos</h3>
           <div className="space-y-2">
             {customItems.map((item) => (
-              <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-60')}>
+              <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-50')}>
                 <CardContent className="flex items-center gap-3 p-3">
                   <Checkbox
                     checked={item.checked}
                     onCheckedChange={(checked) =>
                       handleToggleCustomItem(item.id, checked as boolean)
                     }
-                    className="h-5 w-5"
+                    className="h-7 w-7 shrink-0 rounded-md"
                   />
                   <p
                     className={cn(
@@ -723,8 +783,8 @@ export default function ListaPage() {
 
       {/* Sticky footer — total + CTA */}
       {listDetails?.list.status !== 'completed' && (listDetails?.items?.length || customItems.length > 0) ? (
-        <div className="fixed bottom-20 left-1/2 w-full max-w-lg -translate-x-1/2 px-4 pb-safe">
-          <div className="flex items-center justify-between rounded-xl border border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur-sm">
+        <div className="fixed bottom-0 left-1/2 w-full max-w-lg -translate-x-1/2 px-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pt-2">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-md">
             <div>
               <p className="text-xs text-muted-foreground">Total estimado</p>
               <p className="font-mono text-base font-bold text-foreground">{formatCurrency(estimatedTotal)}</p>

@@ -2,7 +2,7 @@ import { sql } from '@/lib/db'
 import { Pool } from '@neondatabase/serverless'
 import { ExtractedInvoice } from '@/lib/types'
 import { SaveInvoiceSchema } from '@/lib/validations'
-import { normalizeProductName, categorizeProduct, validateItemPrices, extractUnit } from '@/lib/invoice-utils'
+import { normalizeProductName, categorizeProduct, validateItemPrices, extractUnit, buildComparablePricing } from '@/lib/invoice-utils'
 import { getSessionUserId } from '@/lib/auth-session'
 import { setAppUserId } from '@/lib/session-sql'
 
@@ -114,6 +114,7 @@ export async function POST(request: Request) {
       // Process items
       for (const item of data.items) {
         const validated = validateItemPrices(item)
+        const comparablePricing = buildComparablePricing(validated)
         const normalizedName = normalizeProductName(validated.description)
         const category = categorizeProduct(validated.description)
 
@@ -135,9 +136,35 @@ export async function POST(request: Request) {
         }
 
         await client.query(`
-          INSERT INTO invoice_items (invoice_id, product_id, raw_description, quantity, unit_price, total_price, user_id)
-          VALUES ($1, $2, $3, $4, $5, $6, $7)
-        `, [invoiceId, productId, validated.description, validated.quantity, validated.unit_price, validated.total_price, userId])
+          INSERT INTO invoice_items (
+            invoice_id,
+            product_id,
+            raw_description,
+            quantity,
+            unit_price,
+            total_price,
+            comparable_base_unit,
+            comparable_quantity_base,
+            comparable_unit_price,
+            measurement_source,
+            measurement_confidence,
+            user_id
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        `, [
+          invoiceId,
+          productId,
+          validated.description,
+          validated.quantity,
+          validated.unit_price,
+          validated.total_price,
+          comparablePricing.comparable_base_unit,
+          comparablePricing.comparable_quantity_base,
+          comparablePricing.comparable_unit_price,
+          comparablePricing.measurement_source,
+          comparablePricing.measurement_confidence,
+          userId,
+        ])
       }
 
       await client.query('COMMIT')
