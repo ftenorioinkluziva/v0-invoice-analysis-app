@@ -5,6 +5,7 @@ import { DashboardStats } from '@/lib/types'
 import {
   Area,
   AreaChart,
+  CartesianGrid,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -14,6 +15,16 @@ import {
 type SpendingChartProps = {
   data: DashboardStats['spending_by_month']
   isLoading?: boolean
+}
+
+const chartColors = {
+  axis: 'oklch(0.72 0.015 165)',
+  grid: 'oklch(0.32 0.02 165)',
+  line: 'oklch(0.78 0.16 165)',
+  lineSoft: 'oklch(0.7 0.17 145)',
+  tooltipBg: 'oklch(0.12 0.01 165)',
+  tooltipBorder: 'oklch(0.34 0.04 165)',
+  tooltipText: 'oklch(0.98 0.005 165)',
 }
 
 export function SpendingChart({ data, isLoading }: SpendingChartProps) {
@@ -37,7 +48,7 @@ export function SpendingChart({ data, isLoading }: SpendingChartProps) {
     return (
       <Card className="bg-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Evolucao de Gastos</CardTitle>
+          <CardTitle className="text-base">Evolução de gastos</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="h-45 animate-pulse rounded bg-secondary/50" />
@@ -50,12 +61,12 @@ export function SpendingChart({ data, isLoading }: SpendingChartProps) {
     return (
       <Card className="bg-card">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Evolucao de Gastos</CardTitle>
+          <CardTitle className="text-base">Evolução de gastos</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex h-45 items-center justify-center">
             <p className="text-sm text-muted-foreground">
-              Dados insuficientes para exibir grafico
+              Dados insuficientes para exibir gráfico
             </p>
           </div>
         </CardContent>
@@ -71,46 +82,54 @@ export function SpendingChart({ data, isLoading }: SpendingChartProps) {
   return (
     <Card className="bg-card">
       <CardHeader className="pb-2">
-        <CardTitle className="text-base">Evolucao de Gastos</CardTitle>
+        <CardTitle className="text-base">Evolução de gastos</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="h-45">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
               <defs>
-                <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="oklch(0.78 0.16 165)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="oklch(0.78 0.16 165)" stopOpacity={0} />
+                <linearGradient id="totalSpendWash" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={chartColors.line} stopOpacity={0.34} />
+                  <stop offset="42%" stopColor={chartColors.lineSoft} stopOpacity={0.14} />
+                  <stop offset="100%" stopColor={chartColors.lineSoft} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
+              <CartesianGrid
+                vertical={false}
+                stroke={chartColors.grid}
+                strokeDasharray="3 6"
+                strokeOpacity={0.55}
+              />
               <XAxis
                 dataKey="month"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: 'oklch(0.65 0 0)', fontSize: 11 }}
+                tick={{ fill: chartColors.axis, fontSize: 11 }}
               />
               <YAxis
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: 'oklch(0.65 0 0)', fontSize: 11 }}
+                tick={{ fill: chartColors.axis, fontSize: 11 }}
                 tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'oklch(0.12 0 0)',
-                  border: '1px solid oklch(0.22 0 0)',
+                  backgroundColor: chartColors.tooltipBg,
+                  border: `1px solid ${chartColors.tooltipBorder}`,
                   borderRadius: '8px',
-                  color: 'oklch(0.98 0 0)',
+                  color: chartColors.tooltipText,
                 }}
                 formatter={(value: number) => [formatCurrency(value), 'Total']}
-                labelStyle={{ color: 'oklch(0.65 0 0)' }}
+                labelStyle={{ color: chartColors.axis }}
               />
               <Area
                 type="monotone"
                 dataKey="total"
-                stroke="oklch(0.78 0.16 165)"
-                strokeWidth={2}
-                fill="url(#colorTotal)"
+                stroke={chartColors.line}
+                strokeWidth={2.5}
+                fill="url(#totalSpendWash)"
+                activeDot={{ r: 5, fill: chartColors.line, stroke: chartColors.tooltipBg, strokeWidth: 2 }}
               />
             </AreaChart>
           </ResponsiveContainer>

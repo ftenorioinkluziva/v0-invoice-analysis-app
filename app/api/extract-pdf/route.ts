@@ -1,6 +1,59 @@
 import { generateText, Output } from 'ai'
 import { google } from '@ai-sdk/google'
 import { ExtractedInvoiceSchema } from '@/lib/types'
+import { getSessionUserId } from '@/lib/auth-session'
+
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+export const SUPPORTED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const
+
+type UploadValidationResult =
+  | { valid: true }
+  | {
+      valid: false
+      statusCode: number
+      code: string
+      message: string
+    }
+
+export const validateUploadFile = (file: File | null): UploadValidationResult => {
+  if (!file) {
+    return {
+      valid: false,
+      statusCode: 400,
+      code: 'FILE_REQUIRED',
+      message: 'Selecione um PDF ou imagem de nota fiscal para importar.',
+    }
+  }
+
+  if (!SUPPORTED_FILE_TYPES.includes(file.type as (typeof SUPPORTED_FILE_TYPES)[number])) {
+    return {
+      valid: false,
+      statusCode: 415,
+      code: 'UNSUPPORTED_FILE_TYPE',
+      message: 'Formato não aceito. Envie PDF, JPG, PNG ou WEBP.',
+    }
+  }
+
+  if (file.size <= 0) {
+    return {
+      valid: false,
+      statusCode: 400,
+      code: 'EMPTY_FILE',
+      message: 'O arquivo está vazio. Selecione outro arquivo.',
+    }
+  }
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return {
+      valid: false,
+      statusCode: 413,
+      code: 'FILE_TOO_LARGE',
+      message: 'Arquivo muito grande. Envie uma nota de até 10 MB.',
+    }
+  }
+
+  return { valid: true }
+}
 
 type ExtractPdfError = {
   statusCode: number
@@ -81,11 +134,32 @@ const getExtractPdfError = (error: unknown): ExtractPdfError => {
 
 export async function POST(request: Request) {
   try {
+    const userId = await getSessionUserId(request)
+    if (!userId) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const formData = await request.formData()
     const file = formData.get('file') as File | null
-
     if (!file) {
-      return Response.json({ error: 'No file provided' }, { status: 400 })
+      return Response.json(
+        {
+          error: 'Selecione um PDF ou imagem de nota fiscal para importar.',
+          code: 'FILE_REQUIRED',
+        },
+        { status: 400 }
+      )
+    }
+
+    const fileValidation = validateUploadFile(file)
+    if (!fileValidation.valid) {
+      return Response.json(
+        {
+          error: fileValidation.message,
+          code: fileValidation.code,
+        },
+        { status: fileValidation.statusCode }
+      )
     }
 
     const arrayBuffer = await file.arrayBuffer()

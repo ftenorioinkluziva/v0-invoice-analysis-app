@@ -214,7 +214,7 @@ export default function AlertasPage() {
             <div>
               <p className="font-medium">Nenhum alerta</p>
               <p className="text-sm text-muted-foreground">
-                Voce sera notificado sobre variacoes de preco
+                Você será notificado sobre variações de preço
               </p>
             </div>
           </CardContent>

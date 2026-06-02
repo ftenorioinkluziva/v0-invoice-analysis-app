@@ -129,7 +129,7 @@ export default function ListaPage() {
 
   const formatItemUnitPrice = (item: ShoppingListDetailItem) => {
     const unitPrice = getShoppingListItemUnitPrice(item)
-    return unitPrice === null ? 'Sem preco' : `${formatCurrency(unitPrice)} ${UNIT_PRICE_SUFFIX}`
+    return unitPrice === null ? 'Sem preço' : `${formatCurrency(unitPrice)} ${UNIT_PRICE_SUFFIX}`
   }
 
   const formatComparableReference = (item: ShoppingListDetailItem) => {
@@ -282,16 +282,19 @@ export default function ListaPage() {
   // List view
   if (!selectedListId) {
     return (
-      <div className="flex flex-col gap-4 p-4">
-        <header className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-foreground">Listas de Compras</h1>
-            <p className="text-sm text-muted-foreground">Gerencie suas listas</p>
+      <div className="flex flex-col gap-5 p-4 md:py-6">
+        <header className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-foreground">Listas de compras</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {activeLists.length} ativa{activeLists.length === 1 ? '' : 's'}
+              {completedLists.length > 0 && `, ${completedLists.length} finalizada${completedLists.length === 1 ? '' : 's'}`}
+            </p>
           </div>
           <Dialog open={showNewListDialog} onOpenChange={setShowNewListDialog}>
             <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="mr-1 h-4 w-4" />
+              <Button size="sm" className="h-10 shrink-0">
+                <Plus className="mr-1.5 h-4 w-4" />
                 Nova
               </Button>
             </DialogTrigger>
@@ -322,20 +325,20 @@ export default function ListaPage() {
         ) : listsData?.lists && listsData.lists.length > 0 ? (
           <>
             {activeLists.length > 0 ? (
-              <div className="space-y-2">
+              <div className="grid gap-2 md:grid-cols-2">
                 {activeLists.map((list) => (
                   <Card
                     key={list.id}
-                    className="cursor-pointer bg-card transition-colors hover:bg-secondary/50"
+                    className="cursor-pointer bg-card transition-colors hover:bg-secondary/50 focus-within:ring-2 focus-within:ring-ring"
                     onClick={() => setSelectedListId(list.id)}
                   >
-                    <CardContent className="flex items-center justify-between p-4">
-                      <div className="flex items-center gap-3">
+                    <CardContent className="flex min-h-24 items-center justify-between gap-3 p-4">
+                      <div className="flex min-w-0 items-center gap-3">
                         <div className="rounded-lg bg-primary/10 p-2">
                           <ShoppingCart className="h-5 w-5 text-primary" />
                         </div>
-                        <div>
-                          <p className="font-medium">{list.name}</p>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{list.name}</p>
                           <p className="text-sm text-muted-foreground">
                             {list.checked_count || 0}/{list.item_count || 0} itens
                             {list.estimated_total > 0 &&
@@ -379,13 +382,13 @@ export default function ListaPage() {
                             className="cursor-pointer bg-card/50 transition-colors hover:bg-secondary/50"
                             onClick={() => setSelectedListId(list.id)}
                           >
-                            <CardContent className="flex items-center justify-between p-4 opacity-80">
-                              <div className="flex items-center gap-3">
+                            <CardContent className="flex items-center justify-between gap-3 p-4 opacity-80">
+                              <div className="flex min-w-0 items-center gap-3">
                                 <div className="rounded-lg bg-secondary p-2">
                                   <Check className="h-5 w-5 text-muted-foreground" />
                                 </div>
-                                <div>
-                                  <p className="font-medium text-muted-foreground">{list.name}</p>
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium text-muted-foreground">{list.name}</p>
                                   <p className="text-sm text-muted-foreground">
                                     {list.checked_count || 0}/{list.item_count || 0} itens
                                     {list.estimated_total > 0 &&
@@ -429,14 +432,20 @@ export default function ListaPage() {
 
   // List detail view
   return (
-    <div className={cn('flex flex-col gap-4 p-4', hasFooter && 'pb-32')}>
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={() => { setSelectedListId(null); setCustomItems([]) }}>
+    <div className={cn('flex flex-col gap-4 p-4 md:py-6', hasFooter && 'pb-32 md:pb-28')}>
+      <header className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 shrink-0"
+            onClick={() => { setSelectedListId(null); setCustomItems([]) }}
+            aria-label="Voltar para listas"
+          >
             <ChevronRight className="h-5 w-5 rotate-180" />
           </Button>
-          <div>
-            <h1 className="text-lg font-bold text-foreground">
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-foreground">
               {listDetails?.list.name || 'Lista'}
             </h1>
             <p className="text-sm text-muted-foreground">
@@ -450,276 +459,171 @@ export default function ListaPage() {
         <ErrorState message="Erro ao carregar lista" onRetry={() => mutateDetails()} />
       )}
 
-      {/* Search catalog */}
-      <div className="relative">
-        <Input
-          placeholder="Buscar produto no catálogo..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="bg-secondary/50"
-        />
-        {searchQuery && (
-          <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
-            <div className="max-h-48 overflow-y-auto overscroll-contain p-1">
-              {productsData?.products?.slice(0, 5).map((product) => (
-                <button
-                  key={product.id}
-                  className="flex w-full items-center justify-between rounded-lg p-2.5 text-left transition-colors hover:bg-secondary/50"
-                  onClick={() => handleAddItem(product.id)}
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium capitalize">{product.normalized_name}</p>
-                    <p className="text-xs text-muted-foreground">{product.category}</p>
-                  </div>
-                  <Plus className="ml-2 h-4 w-4 shrink-0 text-primary" />
-                </button>
-              ))}
-              {(!productsData?.products || productsData.products.length === 0) && (
-                <p className="px-2 py-3 text-center text-sm text-muted-foreground">
-                  Nenhum produto encontrado no catálogo
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Custom item input */}
-      {showCustomInput ? (
-        <div className="flex gap-2">
-          <Input
-            autoFocus
-            placeholder="Nome do item avulso..."
-            value={customItemQuery}
-            onChange={(e) => setCustomItemQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter') return
-              handleAddCustomItem(customItemQuery)
-              setCustomItemQuery('')
-              setShowCustomInput(false)
-            }}
-            className="bg-secondary/50"
-          />
-          <Button
-            size="sm"
-            onClick={() => {
-              handleAddCustomItem(customItemQuery)
-              setCustomItemQuery('')
-              setShowCustomInput(false)
-            }}
-          >
-            Adicionar
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => { setShowCustomInput(false); setCustomItemQuery('') }}>
-            Cancelar
-          </Button>
-        </div>
-      ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full border-dashed text-muted-foreground"
-          onClick={() => setShowCustomInput(true)}
-        >
-          <Plus className="mr-1.5 h-4 w-4" />
-          Item avulso (sem histórico)
-        </Button>
-      )}
-
-      {/* Suggestions */}
-      {listDetails?.suggestions && listDetails.suggestions.length > 0 && (
-        <Card className="bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              <Sparkles className="h-4 w-4 text-primary" />
-              Sugestões de Recompra
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {listDetails.suggestions.map((suggestion) => (
-                <button
-                  key={suggestion.product_id}
-                  className="flex items-center gap-1.5 rounded-full border border-border bg-secondary/20 px-2.5 py-1 text-sm transition-colors hover:border-primary/30 hover:bg-secondary"
-                  onClick={() => handleAddItem(suggestion.product_id)}
-                >
-                  <Plus className="h-3 w-3 shrink-0 text-primary" />
-                  <span className="max-w-36 truncate capitalize">{suggestion.normalized_name}</span>
-                  <span className="shrink-0 rounded bg-secondary px-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
-                    {suggestion.days_since_purchase}d
-                  </span>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Items by category */}
-      {groupedItems && Object.keys(groupedItems).length > 0 ? (
+      <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_20rem] md:items-start">
         <div className="space-y-4">
-          {Object.entries(groupedItems).map(([category, items]) => (
-            <div key={category}>
-              <div className="mb-2 flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">{category}</span>
-                <div className="h-px flex-1 bg-border/50" />
-              </div>
-              <div className="space-y-2">
-                {items.map((item) => (
-                  <Card
-                    key={item.id}
-                    className={cn(
-                      'bg-card transition-all duration-200',
-                      item.checked
-                        ? 'border-l-2 border-l-border opacity-50'
-                        : 'border-l-2 border-l-primary/40'
-                    )}
-                  >
-                    <CardContent className="flex items-center gap-3 p-3">
-                      <Checkbox
-                        checked={item.checked}
-                        onCheckedChange={(checked) =>
-                          handleToggleItem(item.id, checked as boolean)
-                        }
-                        className="h-7 w-7 shrink-0 rounded-md"
-                      />
-
-                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <p
-                            className={cn(
-                              'line-clamp-2 break-words text-sm font-semibold capitalize leading-tight transition-all duration-200',
-                              item.checked && 'line-through text-muted-foreground'
-                            )}
-                            title={item.normalized_name}
-                          >
-                            {item.normalized_name}
-                          </p>
-                          <div className="flex shrink-0 items-center gap-1">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                              disabled={item.quantity <= MIN_QUANTITY}
-                              aria-label="Diminuir quantidade"
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="min-w-[1.5rem] text-center text-sm font-medium">
-                              {item.quantity}
-                            </span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                              aria-label="Aumentar quantidade"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {item.quantity > 1 && (
-                            <span className="text-xs text-muted-foreground">
-                              {formatItemUnitPrice(item)}
-                            </span>
-                          )}
-                          {item.price_variation !== 0 && (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <span
-                                  className={cn(
-                                    'inline-flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-semibold',
-                                    item.price_variation > 0
-                                      ? 'bg-destructive/10 text-destructive'
-                                      : 'bg-success/10 text-success'
-                                  )}
-                                  tabIndex={0}
-                                >
-                                  {item.price_variation > 0 ? (
-                                    <TrendingUp className="h-3 w-3" />
-                                  ) : (
-                                    <TrendingDown className="h-3 w-3" />
-                                  )}
-                                  {Math.abs(item.price_variation).toFixed(0)}%
-                                </span>
-                              </PopoverTrigger>
-                              <PopoverContent side="top" className="w-64 p-3 text-xs">
-                                <p className="font-semibold text-foreground">Variação de preço</p>
-                                <p className="mt-1 text-muted-foreground">
-                                  Indica a diferença percentual do preço deste item em relação à última compra registrada. Valores positivos mostram aumento, negativos mostram redução.
-                                </p>
-                              </PopoverContent>
-                            </Popover>
-                          )}
-                        </div>
-
-                        {formatComparableReference(item) && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate text-xs font-semibold text-foreground">
-                              {getShoppingListItemComparableContext(item)}
-                            </span>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button className="shrink-0 rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
-                                  {formatComparableReference(item)}
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent side="top" className="w-64 p-3 text-xs">
-                                <p className="font-semibold text-foreground">Preço de referência do grupo</p>
-                                <p className="mt-1 text-muted-foreground">
-                                  Média do preço por {item.comparable_base_unit} de todos os produtos do grupo{' '}
-                                  <span className="font-semibold text-foreground">
-                                    {item.comparable_group_name}
-                                  </span>
-                                  {' '}nos últimos 90 dias. Serve para comparar marcas e embalagens diferentes pelo mesmo peso ou volume.
-                                </p>
-                              </PopoverContent>
-                            </Popover>
-                          </div>
+          {/* Items by category */}
+          {groupedItems && Object.keys(groupedItems).length > 0 ? (
+            <div className="space-y-5">
+              {Object.entries(groupedItems).map(([category, items]) => (
+                <div key={category}>
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">{category}</span>
+                    <div className="h-px flex-1 bg-border/50" />
+                  </div>
+                  <div className="space-y-2">
+                    {items.map((item) => (
+                      <Card
+                        key={item.id}
+                        className={cn(
+                          'bg-card transition-colors duration-200',
+                          item.checked ? 'border-border/60 opacity-60' : 'border-primary/30'
                         )}
-                      </div>
+                      >
+                        <CardContent className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+                          <Checkbox
+                            checked={item.checked}
+                            onCheckedChange={(checked) =>
+                              handleToggleItem(item.id, checked as boolean)
+                            }
+                            className="mt-0.5 h-7 w-7 shrink-0 rounded-md sm:mt-0"
+                          />
 
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
-                        <span className={cn(
-                          'font-mono text-base font-bold transition-all duration-200',
-                          item.checked && 'text-muted-foreground'
-                        )}>
-                          {formatCurrency(getShoppingListItemTotal(item))}
-                        </span>
-                        <button
-                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-destructive"
-                          onClick={() => handleDeleteItem(item.id)}
-                          aria-label="Remover item"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <p
+                                className={cn(
+                                  'line-clamp-2 break-words text-sm font-semibold capitalize leading-tight transition-all duration-200',
+                                  item.checked && 'line-through text-muted-foreground'
+                                )}
+                                title={item.normalized_name}
+                              >
+                                {item.normalized_name}
+                              </p>
+                              <div className="flex shrink-0 items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-9 w-9 sm:h-8 sm:w-8"
+                                  onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                                  disabled={item.quantity <= MIN_QUANTITY}
+                                  aria-label="Diminuir quantidade"
+                                >
+                                  <Minus className="h-3.5 w-3.5" />
+                                </Button>
+                                <span className="min-w-8 text-center text-sm font-medium">
+                                  {item.quantity}
+                                </span>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-9 w-9 sm:h-8 sm:w-8"
+                                  onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                                  aria-label="Aumentar quantidade"
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              {item.quantity > 1 && (
+                                <span className="text-xs text-muted-foreground">
+                                  {formatItemUnitPrice(item)}
+                                </span>
+                              )}
+                              {item.price_variation !== 0 && (
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <span
+                                      className={cn(
+                                        'inline-flex cursor-pointer items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-semibold',
+                                        item.price_variation > 0
+                                          ? 'bg-destructive/10 text-destructive'
+                                          : 'bg-success/10 text-success'
+                                      )}
+                                      tabIndex={0}
+                                    >
+                                      {item.price_variation > 0 ? (
+                                        <TrendingUp className="h-3 w-3" />
+                                      ) : (
+                                        <TrendingDown className="h-3 w-3" />
+                                      )}
+                                      {Math.abs(item.price_variation).toFixed(0)}%
+                                    </span>
+                                  </PopoverTrigger>
+                                  <PopoverContent side="top" className="w-64 p-3 text-xs">
+                                    <p className="font-semibold text-foreground">Variação de preço</p>
+                                    <p className="mt-1 text-muted-foreground">
+                                      Indica a diferença percentual do preço deste item em relação à última compra registrada. Valores positivos mostram aumento, negativos mostram redução.
+                                    </p>
+                                  </PopoverContent>
+                                </Popover>
+                              )}
+                            </div>
+
+                            {formatComparableReference(item) && (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="min-w-0 text-xs font-semibold text-foreground">
+                                  {getShoppingListItemComparableContext(item)}
+                                </span>
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <button className="shrink-0 rounded bg-secondary px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+                                      {formatComparableReference(item)}
+                                    </button>
+                                  </PopoverTrigger>
+                                  <PopoverContent side="top" className="w-64 p-3 text-xs">
+                                    <p className="font-semibold text-foreground">Preço de referência do grupo</p>
+                                    <p className="mt-1 text-muted-foreground">
+                                      Média do preço por {item.comparable_base_unit} de todos os produtos do grupo{' '}
+                                      <span className="font-semibold text-foreground">
+                                        {item.comparable_group_name}
+                                      </span>
+                                      {' '}nos últimos 90 dias. Serve para comparar marcas e embalagens diferentes pelo mesmo peso ou volume.
+                                    </p>
+                                  </PopoverContent>
+                                </Popover>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="col-start-2 flex items-center justify-between gap-3 sm:col-start-auto sm:flex-col sm:items-end sm:gap-1.5">
+                            <span className={cn(
+                              'font-mono text-base font-bold transition-all duration-200',
+                              item.checked && 'text-muted-foreground'
+                            )}>
+                              {formatCurrency(getShoppingListItemTotal(item))}
+                            </span>
+                            <button
+                              className="flex h-9 w-9 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-destructive sm:h-7 sm:w-7"
+                              onClick={() => handleDeleteItem(item.id)}
+                              aria-label="Remover item"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ) : (
-        <Card className="bg-card">
-          <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-            <div className="rounded-full bg-secondary p-4">
-              <ShoppingCart className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="font-medium">Lista vazia</p>
-              <p className="text-sm text-muted-foreground">
-                Adicione produtos usando a busca acima
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <Card className="bg-card">
+              <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
+                <div className="rounded-full bg-secondary p-4">
+                  <ShoppingCart className="h-8 w-8 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="font-medium">Lista vazia</p>
+                  <p className="text-sm text-muted-foreground">
+                    Adicione produtos usando a busca acima
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
       {/* Custom items */}
       {customItems.length > 0 && (
@@ -758,6 +662,116 @@ export default function ListaPage() {
           </div>
         </div>
       )}
+        </div>
+
+        <aside className="space-y-3 md:sticky md:top-6">
+          {/* Search catalog */}
+          <div className="relative">
+            <Input
+              placeholder="Buscar produto no catálogo..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-11 bg-secondary/50"
+            />
+            {searchQuery && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                <div className="max-h-56 overflow-y-auto overscroll-contain p-1">
+                  {productsData?.products?.slice(0, 5).map((product) => (
+                    <button
+                      key={product.id}
+                      className="flex min-h-12 w-full items-center justify-between rounded-lg p-2.5 text-left transition-colors hover:bg-secondary/50"
+                      onClick={() => handleAddItem(product.id)}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium capitalize">{product.normalized_name}</p>
+                        <p className="text-xs text-muted-foreground">{product.category}</p>
+                      </div>
+                      <Plus className="ml-2 h-4 w-4 shrink-0 text-primary" />
+                    </button>
+                  ))}
+                  {(!productsData?.products || productsData.products.length === 0) && (
+                    <p className="px-2 py-3 text-center text-sm text-muted-foreground">
+                      Nenhum produto encontrado no catálogo
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Custom item input */}
+          {showCustomInput ? (
+            <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] md:grid-cols-1">
+              <Input
+                autoFocus
+                placeholder="Nome do item avulso..."
+                value={customItemQuery}
+                onChange={(e) => setCustomItemQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'Enter') return
+                  handleAddCustomItem(customItemQuery)
+                  setCustomItemQuery('')
+                  setShowCustomInput(false)
+                }}
+                className="h-11 bg-secondary/50"
+              />
+              <Button
+                size="sm"
+                className="h-10"
+                onClick={() => {
+                  handleAddCustomItem(customItemQuery)
+                  setCustomItemQuery('')
+                  setShowCustomInput(false)
+                }}
+              >
+                Adicionar
+              </Button>
+              <Button size="sm" variant="ghost" className="h-10" onClick={() => { setShowCustomInput(false); setCustomItemQuery('') }}>
+                Cancelar
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-11 w-full border-dashed text-muted-foreground"
+              onClick={() => setShowCustomInput(true)}
+            >
+              <Plus className="mr-1.5 h-4 w-4" />
+              Item avulso
+            </Button>
+          )}
+
+          {/* Suggestions */}
+          {listDetails?.suggestions && listDetails.suggestions.length > 0 && (
+            <Card className="bg-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  Sugestões de recompra
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {listDetails.suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.product_id}
+                      className="flex min-h-9 max-w-full items-center gap-1.5 rounded-full border border-border bg-secondary/20 px-2.5 py-1 text-sm transition-colors hover:border-primary/30 hover:bg-secondary"
+                      onClick={() => handleAddItem(suggestion.product_id)}
+                    >
+                      <Plus className="h-3 w-3 shrink-0 text-primary" />
+                      <span className="max-w-44 truncate capitalize">{suggestion.normalized_name}</span>
+                      <span className="shrink-0 rounded bg-secondary px-1 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                        {suggestion.days_since_purchase}d
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </aside>
+      </div>
 
       {/* Finish shopping button */}
       {(listDetails?.items?.length || customItems.length > 0) && listDetails?.list.status !== 'completed' && (
@@ -781,9 +795,9 @@ export default function ListaPage() {
         </Dialog>
       )}
 
-      {/* Sticky footer — total + CTA */}
+      {/* Sticky footer: total + CTA */}
       {listDetails?.list.status !== 'completed' && (listDetails?.items?.length || customItems.length > 0) ? (
-        <div className="fixed bottom-0 left-1/2 w-full max-w-lg -translate-x-1/2 px-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pt-2">
+        <div className="fixed bottom-0 left-1/2 w-full max-w-lg -translate-x-1/2 px-4 pb-[calc(5rem+env(safe-area-inset-bottom,0px))] pt-2 md:max-w-5xl md:px-10">
           <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3 shadow-md">
             <div>
               <p className="text-xs text-muted-foreground">Total estimado</p>

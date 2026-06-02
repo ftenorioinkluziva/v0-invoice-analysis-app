@@ -7,10 +7,6 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const sessionCookie = getSessionCookie(request)
 
-  if (sessionCookie && PUBLIC_PATHS.includes(pathname)) {
-    return NextResponse.redirect(new URL('/', request.url))
-  }
-
   if (!sessionCookie && !PUBLIC_PATHS.includes(pathname)) {
     return NextResponse.redirect(new URL('/sign-in', request.url))
   }

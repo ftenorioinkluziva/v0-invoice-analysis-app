@@ -51,7 +51,7 @@ export default function HomePage() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">NoteWise</h1>
-          <p className="text-sm text-muted-foreground">Analise de Notas Fiscais</p>
+          <p className="text-sm text-muted-foreground">Análise de notas fiscais</p>
         </div>
         <Button
           variant="ghost"
@@ -64,7 +64,7 @@ export default function HomePage() {
         </Button>
       </header>
 
-      {/* Upload — primary action */}
+      {/* Upload: primary action */}
       <PdfUpload onSuccess={handleUploadSuccess} />
 
       {/* Error state */}

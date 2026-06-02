@@ -1,16 +1,16 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { MobileNav } from '@/components/mobile-nav'
+import { AppShell } from '@/components/app-shell'
 import './globals.css'
 
 const _geist = Geist({ subsets: ['latin'] })
 const _geistMono = Geist_Mono({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'NoteWise - Analise de Notas Fiscais',
+  title: 'NoteWise - Análise de Notas Fiscais',
   description:
-    'Aplicativo inteligente para analise de notas fiscais, historico de precos e controle de gastos.',
+    'Aplicativo inteligente para análise de notas fiscais, histórico de preços e controle de gastos.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0d0d0d',
+  themeColor: '#090b0a',
 }
 
 export default function RootLayout({
@@ -50,8 +50,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="font-sans antialiased">
-        <main className="mx-auto min-h-screen max-w-lg pb-20">{children}</main>
-        <MobileNav />
+        <AppShell>{children}</AppShell>
         <Analytics />
       </body>
     </html>

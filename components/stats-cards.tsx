@@ -47,7 +47,7 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
   return (
     <div className="space-y-3">
       {/* Main spending card */}
-      <Card className="overflow-hidden bg-gradient-to-br from-card to-secondary/30">
+      <Card className="overflow-hidden border-border/80 bg-card">
         <CardContent className="p-4">
           <div className="flex items-start justify-between">
             <div>
@@ -76,7 +76,7 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
             </div>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Mes anterior: {formatCurrency(stats.total_spent_last_month)}
+            Mês anterior: {formatCurrency(stats.total_spent_last_month)}
           </p>
         </CardContent>
       </Card>

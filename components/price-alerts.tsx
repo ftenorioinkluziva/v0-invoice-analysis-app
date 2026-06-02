@@ -23,7 +23,7 @@ export function PriceAlerts({ priceIncreases, isLoading }: PriceAlertsProps) {
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <TrendingUp className="h-4 w-4 text-destructive" />
-            Atencao nos Precos
+            Atenção nos preços
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -43,12 +43,12 @@ export function PriceAlerts({ priceIncreases, isLoading }: PriceAlertsProps) {
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <TrendingUp className="h-4 w-4 text-primary" />
-            Precos Estaveis
+            Preços estáveis
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">
-            Nenhuma variacao significativa de preco detectada recentemente.
+            Nenhuma variação significativa de preço detectada recentemente.
           </p>
         </CardContent>
       </Card>
@@ -60,7 +60,7 @@ export function PriceAlerts({ priceIncreases, isLoading }: PriceAlertsProps) {
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <TrendingUp className="h-4 w-4 text-destructive" />
-          Atencao nos Precos
+          Atenção nos preços
         </CardTitle>
       </CardHeader>
       <CardContent>

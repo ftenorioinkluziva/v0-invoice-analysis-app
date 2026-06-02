@@ -44,10 +44,15 @@ export default function SignInPage() {
   }
 
   return (
-    <Card>
-      <CardHeader className="space-y-1">
-        <CardTitle className="text-2xl">Entrar</CardTitle>
-        <CardDescription>Acesse o NoteWise com sua conta</CardDescription>
+    <Card className="border-border/80 bg-card/95 shadow-none">
+      <CardHeader className="space-y-3 pb-4">
+        <div>
+          <p className="text-sm font-medium text-primary">NoteWise</p>
+          <CardTitle className="mt-1 text-2xl">Entrar</CardTitle>
+        </div>
+        <CardDescription>
+          Acesse suas notas, listas e alertas de preço em BRL.
+        </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -83,7 +88,7 @@ export default function SignInPage() {
             <Separator />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">ou</span>
+              <span className="bg-card px-2 text-muted-foreground">ou</span>
           </div>
         </div>
 
@@ -114,7 +119,9 @@ export default function SignInPage() {
           </div>
 
           {error && (
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
           )}
 
           <Button type="submit" className="w-full" disabled={loading}>
@@ -123,10 +130,10 @@ export default function SignInPage() {
         </form>
       </CardContent>
 
-      <CardFooter>
+      <CardFooter className="pt-0">
         <p className="text-sm text-muted-foreground">
           Não tem uma conta?{' '}
-          <Link href="/sign-up" className="text-primary hover:underline">
+          <Link href="/sign-up" className="font-medium text-primary hover:underline">
             Criar conta
           </Link>
         </p>

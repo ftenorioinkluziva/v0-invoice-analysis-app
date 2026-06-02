@@ -6,11 +6,11 @@ import { Home, ShoppingCart, TrendingUp, Bell, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navItems = [
-  { href: '/', icon: Home, label: 'Home' },
+  { href: '/', icon: Home, label: 'Início' },
   { href: '/lista', icon: ShoppingCart, label: 'Lista' },
-  { href: '/historico', icon: TrendingUp, label: 'Precos' },
+  { href: '/historico', icon: TrendingUp, label: 'Preços' },
   { href: '/alertas', icon: Bell, label: 'Alertas' },
-  { href: '/config', icon: Settings, label: 'Config' },
+  { href: '/config', icon: Settings, label: 'Ajustes' },
 ]
 
 export function MobileNav() {
@@ -18,17 +18,18 @@ export function MobileNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-lg safe-area-bottom">
-      <div className="mx-auto flex h-16 max-w-lg items-center justify-around px-2">
+      <div className="mx-auto grid h-16 max-w-lg grid-cols-5 items-center gap-1 px-2">
         {navItems.map(({ href, icon: Icon, label }) => {
           const isActive = pathname === href
           return (
             <Link
               key={href}
               href={href}
+              aria-current={isActive ? 'page' : undefined}
               className={cn(
-                'flex flex-col items-center justify-center gap-1 rounded-lg px-3 py-2 transition-colors',
+                'flex min-h-11 flex-col items-center justify-center gap-1 rounded-lg px-2 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70',
                 isActive
-                  ? 'text-primary'
+                  ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { Upload, FileText, X, Check, Loader2 } from 'lucide-react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { Upload, FileText, Check, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -18,35 +18,117 @@ import { ExtractedInvoice } from '@/lib/types'
 
 type UploadStatus = 'idle' | 'uploading' | 'extracting' | 'preview' | 'saving' | 'success' | 'error'
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+const SUPPORTED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+const SUPPORTED_FILE_LABEL = 'PDF, JPG, PNG ou WEBP'
+const EXTRACTION_TIMEOUT_MS = 90_000
+
+const formatFileSize = (bytes: number) =>
+  new Intl.NumberFormat('pt-BR', {
+    maximumFractionDigits: bytes >= 1024 * 1024 ? 1 : 0,
+  }).format(bytes / 1024 / 1024) + ' MB'
+
+const getUploadErrorMessage = (responseStatus: number, apiError?: string) => {
+  if (apiError) return apiError
+
+  switch (responseStatus) {
+    case 400:
+      return 'Não foi possível ler esse arquivo. Selecione outro PDF ou imagem da nota.'
+    case 401:
+      return 'Sua sessão expirou. Entre novamente para importar a nota.'
+    case 413:
+      return 'Arquivo muito grande. Envie uma nota de até 10 MB.'
+    case 415:
+      return `Formato não aceito. Envie ${SUPPORTED_FILE_LABEL}.`
+    case 429:
+      return 'Há muitas extrações em andamento. Tente novamente em instantes.'
+    case 503:
+      return 'A extração está temporariamente indisponível. Tente novamente mais tarde.'
+    default:
+      return 'Não foi possível extrair os dados agora. Tente novamente.'
+  }
+}
+
 export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
   const [status, setStatus] = useState<UploadStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [extractedData, setExtractedData] = useState<ExtractedInvoice | null>(null)
   const [showPreview, setShowPreview] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const resetInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const clearPendingRequest = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+    abortControllerRef.current = null
+  }
+
+  const validateFile = (file: File) => {
+    if (!SUPPORTED_FILE_TYPES.includes(file.type)) {
+      return `Formato não aceito. Envie ${SUPPORTED_FILE_LABEL}.`
+    }
+
+    if (file.size <= 0) {
+      return 'O arquivo está vazio. Selecione outro arquivo.'
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return `Arquivo muito grande (${formatFileSize(file.size)}). Envie uma nota de até 10 MB.`
+    }
+
+    return null
+  }
 
   const handleFileSelect = useCallback(async (file: File) => {
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
-    if (!allowedTypes.includes(file.type)) {
-      setError('Por favor, selecione um PDF ou uma imagem (JPG, PNG, WEBP)')
+    if (status === 'extracting' || status === 'saving') {
+      return
+    }
+
+    const validationError = validateFile(file)
+    if (validationError) {
+      setStatus('error')
+      setError(validationError)
+      setSelectedFile(null)
+      resetInput()
       return
     }
 
     setSelectedFile(file)
     setStatus('extracting')
     setError(null)
+    setExtractedData(null)
+    setShowPreview(false)
 
     try {
+      abortControllerRef.current?.abort()
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+      timeoutRef.current = setTimeout(() => controller.abort(), EXTRACTION_TIMEOUT_MS)
+
       const formData = new FormData()
       formData.append('file', file)
 
       const response = await fetchWithAuthRedirect('/api/extract-pdf', {
         method: 'POST',
         body: formData,
+        signal: controller.signal,
       })
+      clearPendingRequest()
 
       if (!response.ok) {
-        throw new Error('Failed to extract PDF')
+        const body = (await response.json().catch(() => null)) as { error?: string } | null
+        throw new Error(getUploadErrorMessage(response.status, body?.error))
       }
 
       const result = await response.json()
@@ -56,21 +138,33 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
         setStatus('preview')
         setShowPreview(true)
       } else {
-        throw new Error(result.error || 'Extraction failed')
+        throw new Error(result.error || 'A extração não encontrou dados suficientes na nota.')
       }
     } catch (err) {
+      clearPendingRequest()
       setStatus('error')
-      setError(err instanceof Error ? err.message : 'Erro ao processar PDF')
+      const isAbort = err instanceof DOMException && err.name === 'AbortError'
+      setError(
+        isAbort
+          ? 'A extração demorou mais que o esperado. Tente novamente ou envie uma imagem mais nítida.'
+          : err instanceof Error
+            ? err.message
+            : 'Erro ao processar a nota.'
+      )
     }
-  }, [])
+  }, [status])
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault()
+      setIsDragging(false)
+      if (status === 'extracting' || status === 'saving') {
+        return
+      }
       const file = e.dataTransfer.files[0]
       if (file) handleFileSelect(file)
     },
-    [handleFileSelect]
+    [handleFileSelect, status]
   )
 
   const handleInputChange = useCallback(
@@ -85,6 +179,7 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
     if (!extractedData || !selectedFile) return
 
     setStatus('saving')
+    setError(null)
 
     try {
       const response = await fetchWithAuthRedirect('/api/invoices', {
@@ -101,7 +196,7 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
         if (response.status === 409) {
           throw new Error('Esta nota fiscal já foi importada anteriormente.')
         }
-        throw new Error(body?.error || 'Failed to save invoice')
+        throw new Error(body?.error || 'Não foi possível salvar a nota. Tente novamente.')
       }
 
       setStatus('success')
@@ -111,6 +206,7 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
         setStatus('idle')
         setSelectedFile(null)
         setExtractedData(null)
+        resetInput()
         onSuccess?.()
       }, 2000)
     } catch (err) {
@@ -125,7 +221,20 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
     setSelectedFile(null)
     setExtractedData(null)
     setError(null)
+    setIsDragging(false)
+    abortControllerRef.current?.abort()
+    clearPendingRequest()
+    resetInput()
   }
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort()
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, [])
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -134,21 +243,42 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
     }).format(value)
   }
 
+  const formatDate = (value: string) => {
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return 'Data não identificada'
+    return date.toLocaleDateString('pt-BR')
+  }
+
+  const isBusy = status === 'extracting' || status === 'saving'
+  const canPickFile = status === 'idle' || status === 'error'
+
   return (
     <>
-      <Card className="border-dashed border-2 border-border bg-card/50">
+      <Card
+        className={`border-2 border-dashed bg-card/50 transition-colors ${
+          isDragging ? 'border-primary bg-primary/10' : 'border-border'
+        }`}
+      >
         <CardContent className="p-4">
           <label
             onDrop={handleDrop}
-            onDragOver={(e) => e.preventDefault()}
-            className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg p-6 transition-colors hover:bg-secondary/50"
+            onDragOver={(e) => {
+              e.preventDefault()
+              if (!isBusy) setIsDragging(true)
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            className={`flex flex-col items-center justify-center gap-3 rounded-lg p-6 text-center transition-colors ${
+              canPickFile ? 'cursor-pointer hover:bg-secondary/50' : 'cursor-default'
+            }`}
+            aria-busy={isBusy}
           >
             <input
+              ref={fileInputRef}
               type="file"
               accept="application/pdf,image/jpeg,image/png,image/webp"
               className="hidden"
               onChange={handleInputChange}
-              disabled={status !== 'idle'}
+              disabled={!canPickFile}
             />
             
             {status === 'idle' && (
@@ -157,9 +287,9 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
                   <Upload className="h-6 w-6 text-primary" />
                 </div>
                 <div className="text-center">
-                  <p className="font-medium text-foreground">Upload de Nota Fiscal</p>
+                  <p className="font-medium text-foreground">Importar nota fiscal</p>
                   <p className="text-sm text-muted-foreground">
-                    Arraste um PDF/Imagem ou toque para selecionar
+                    Arraste ou toque para selecionar {SUPPORTED_FILE_LABEL} até 10 MB.
                   </p>
                 </div>
               </>
@@ -168,9 +298,11 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
             {status === 'extracting' && (
               <>
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <div className="text-center">
+                <div className="max-w-full text-center" role="status" aria-live="polite">
                   <p className="font-medium text-foreground">Extraindo dados...</p>
-                  <p className="text-sm text-muted-foreground">{selectedFile?.name}</p>
+                  <p className="max-w-full truncate text-sm text-muted-foreground">
+                    {selectedFile?.name}
+                  </p>
                 </div>
               </>
             )}
@@ -180,20 +312,30 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
                 <div className="rounded-full bg-success/20 p-3">
                   <Check className="h-6 w-6 text-success" />
                 </div>
-                <p className="font-medium text-success">Nota salva com sucesso!</p>
+                <p className="font-medium text-success" role="status" aria-live="polite">
+                  Nota salva com sucesso!
+                </p>
               </>
             )}
 
             {status === 'error' && (
               <>
                 <div className="rounded-full bg-destructive/20 p-3">
-                  <X className="h-6 w-6 text-destructive" />
+                  <AlertCircle className="h-6 w-6 text-destructive" />
                 </div>
-                <div className="text-center">
-                  <p className="font-medium text-destructive">Erro</p>
-                  <p className="text-sm text-muted-foreground">{error}</p>
+                <div className="max-w-full text-center" role="alert">
+                  <p className="font-medium text-destructive">Não foi possível importar</p>
+                  <p className="[overflow-wrap:anywhere] text-sm text-muted-foreground">{error}</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleCancel}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    handleCancel()
+                  }}
+                >
                   Tentar novamente
                 </Button>
               </>
@@ -202,12 +344,24 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
         </CardContent>
       </Card>
 
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+      <Dialog
+        open={showPreview}
+        onOpenChange={(open) => {
+          if (open) {
+            setShowPreview(true)
+            return
+          }
+
+          if (status !== 'saving') {
+            handleCancel()
+          }
+        }}
+      >
         <DialogContent className="max-w-md max-h-[90vh] bg-card">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
-              Confirmar Dados
+              Confirmar dados
             </DialogTitle>
             <DialogDescription>
               Verifique se os dados extraídos estão corretos antes de salvar.
@@ -217,26 +371,28 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
           {extractedData && (
             <ScrollArea className="max-h-[50vh]">
               <div className="space-y-4 pr-4">
-                <div className="rounded-lg bg-secondary/50 p-3">
+                <div className="min-w-0 rounded-lg bg-secondary/50 p-3">
                   <p className="text-sm text-muted-foreground">Estabelecimento</p>
-                  <p className="font-medium">{extractedData.store_name}</p>
+                  <p className="[overflow-wrap:anywhere] font-medium">
+                    {extractedData.store_name || 'Estabelecimento não identificado'}
+                  </p>
                   {extractedData.store_cnpj && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="[overflow-wrap:anywhere] text-xs text-muted-foreground">
                       CNPJ: {extractedData.store_cnpj}
                     </p>
                   )}
                 </div>
 
-                <div className="flex gap-3">
-                  <div className="flex-1 rounded-lg bg-secondary/50 p-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="min-w-0 rounded-lg bg-secondary/50 p-3">
                     <p className="text-sm text-muted-foreground">Data</p>
                     <p className="font-medium">
-                      {new Date(extractedData.purchase_date).toLocaleDateString('pt-BR')}
+                      {formatDate(extractedData.purchase_date)}
                     </p>
                   </div>
-                  <div className="flex-1 rounded-lg bg-primary/10 p-3">
+                  <div className="min-w-0 rounded-lg bg-primary/10 p-3">
                     <p className="text-sm text-muted-foreground">Total</p>
-                    <p className="font-semibold text-primary">
+                    <p className="break-words font-semibold text-primary">
                       {formatCurrency(extractedData.total_amount)}
                     </p>
                   </div>
@@ -247,23 +403,27 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
                     Itens ({extractedData.items.length})
                   </p>
                   <div className="space-y-2">
-                    {extractedData.items.slice(0, 10).map((item, index) => (
+                    {extractedData.items.slice(0, 12).map((item, index) => (
                       <div
                         key={index}
-                        className="flex items-center justify-between rounded-lg bg-secondary/30 p-2 text-sm"
+                        className="flex min-w-0 items-start justify-between gap-2 rounded-lg bg-secondary/30 p-2 text-sm"
                       >
-                        <div className="flex-1 truncate pr-2">
-                          <p className="truncate">{item.description}</p>
-                          <p className="text-xs text-muted-foreground">
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-2 [overflow-wrap:anywhere]">
+                            {item.description}
+                          </p>
+                          <p className="break-words text-xs text-muted-foreground">
                             {item.quantity}x {formatCurrency(item.unit_price)}
                           </p>
                         </div>
-                        <p className="font-medium">{formatCurrency(item.total_price)}</p>
+                        <p className="shrink-0 whitespace-nowrap font-medium">
+                          {formatCurrency(item.total_price)}
+                        </p>
                       </div>
                     ))}
-                    {extractedData.items.length > 10 && (
+                    {extractedData.items.length > 12 && (
                       <p className="text-center text-sm text-muted-foreground">
-                        +{extractedData.items.length - 10} itens
+                        +{extractedData.items.length - 12} itens
                       </p>
                     )}
                   </div>
@@ -283,7 +443,7 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
                   Salvando...
                 </>
               ) : (
-                'Confirmar e Salvar'
+                'Confirmar e salvar'
               )}
             </Button>
           </DialogFooter>

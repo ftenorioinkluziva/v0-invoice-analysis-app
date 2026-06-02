@@ -212,7 +212,7 @@ export default function ConfigPage() {
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <Database className="h-4 w-4 text-muted-foreground" />
-            Dados Armazenados
+            Dados armazenados
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -246,7 +246,7 @@ export default function ConfigPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <Label htmlFor="price-increase" className="flex-1">
-              <p className="font-medium">Alertas de alta de preco</p>
+              <p className="font-medium">Alertas de alta de preço</p>
               <p className="text-xs text-muted-foreground">
                 Notificar quando um produto subir mais de {priceAlertThreshold[0]}%
               </p>
@@ -280,7 +280,7 @@ export default function ConfigPage() {
             <Label htmlFor="opportunities" className="flex-1">
               <p className="font-medium">Oportunidades de economia</p>
               <p className="text-xs text-muted-foreground">
-                Produtos em baixa historica de preco
+                Produtos em baixa histórica de preço
               </p>
             </Label>
             <Switch
@@ -355,7 +355,7 @@ export default function ConfigPage() {
         <CardHeader className="pb-2">
           <CardTitle className="flex items-center gap-2 text-base">
             <Settings className="h-4 w-4 text-muted-foreground" />
-            Gerenciar Dados
+            Gerenciar dados
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -390,8 +390,8 @@ export default function ConfigPage() {
                 <AlertDialogDescription asChild>
                   <div className="space-y-3 text-sm text-muted-foreground">
                     <p>
-                      Esta acao ira remover permanentemente todas as notas fiscais,
-                      produtos e historico de precos. Esta acao nao pode ser desfeita.
+                      Esta ação irá remover permanentemente todas as notas fiscais,
+                      produtos e histórico de preços. Esta ação não pode ser desfeita.
                     </p>
                     <div className="space-y-2 pt-2">
                       <Label htmlFor="confirm-delete">
@@ -432,7 +432,7 @@ export default function ConfigPage() {
           <p className="font-semibold text-foreground">NoteWise</p>
           <p className="text-xs text-muted-foreground">Versao 1.0.0</p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Analise inteligente de notas fiscais
+            Análise inteligente de notas fiscais
           </p>
         </CardContent>
       </Card>
