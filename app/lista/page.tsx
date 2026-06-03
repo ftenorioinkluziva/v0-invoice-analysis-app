@@ -492,7 +492,7 @@ export default function ListaPage() {
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                               <p
                                 className={cn(
-                                  'line-clamp-2 break-words text-sm font-semibold capitalize leading-tight transition-all duration-200',
+                                  'line-clamp-2 wrap-break-word text-sm font-semibold capitalize leading-tight transition-all duration-200',
                                   item.checked && 'line-through text-muted-foreground'
                                 )}
                                 title={item.normalized_name}
