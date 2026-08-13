@@ -1,6 +1,12 @@
 import { getSessionUserId } from '@/lib/auth-session'
 import { parseHistoryPeriodDaysParam } from '@/lib/validations'
 import { withUserTransaction } from '@/lib/session-sql'
+import {
+  operationErrorResponse,
+  toOperationError,
+  unauthorizedError,
+  validationError,
+} from '@/lib/operation-error'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -10,13 +16,13 @@ export async function GET(request: Request) {
   const periodDaysResult = rawPeriodDays === null ? { success: true as const, data: null } : parseHistoryPeriodDaysParam(rawPeriodDays)
 
   if (!periodDaysResult.success) {
-    return Response.json({ error: 'Invalid period_days' }, { status: 400 })
+    return operationErrorResponse(validationError('INVALID_PERIOD_DAYS', 'Invalid period_days'))
   }
 
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const periodDays = periodDaysResult.data
@@ -81,6 +87,9 @@ export async function GET(request: Request) {
       })
   } catch (error) {
     console.error('Error fetching products:', error)
-    return Response.json({ error: 'Failed to fetch products' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'PRODUCTS_LIST_FAILED',
+      message: 'Failed to fetch products',
+    }))
   }
 }
