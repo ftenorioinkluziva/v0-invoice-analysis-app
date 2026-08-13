@@ -26,6 +26,11 @@ describe('DELETE /api/data', () => {
     }))
 
     expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'DATA_DELETION_CONFIRMATION_REQUIRED',
+      category: 'validation',
+      retryable: false,
+    })
     expect(withUserTransaction).not.toHaveBeenCalled()
   })
 

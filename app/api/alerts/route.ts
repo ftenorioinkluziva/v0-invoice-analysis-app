@@ -3,12 +3,13 @@ import { getSessionUserId } from '@/lib/auth-session'
 import { withUserTransaction } from '@/lib/session-sql'
 import { createPgAlertRepository } from '@/lib/alert-repository'
 import { listAlerts, markAlertRead } from '@/lib/alerts'
+import { operationErrorResponse, toOperationError, unauthorizedError, validationError } from '@/lib/operation-error'
 
 export async function GET(request: Request) {
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const alerts = await withUserTransaction(userId, async (client) =>
@@ -17,7 +18,10 @@ export async function GET(request: Request) {
     return Response.json({ alerts })
   } catch (error) {
     console.error('Error fetching alerts:', error)
-    return Response.json({ error: 'Failed to fetch alerts' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'ALERT_LIST_FAILED',
+      message: 'Failed to fetch alerts',
+    }))
   }
 }
 
@@ -25,12 +29,19 @@ export async function PATCH(request: Request) {
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const parsed = UpdateAlertSchema.safeParse(await request.json())
     if (!parsed.success) {
-      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+      return operationErrorResponse(
+        validationError(
+          'INVALID_ALERT_REQUEST',
+          'Invalid request',
+          parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: { details: parsed.error.flatten() } }
+      )
     }
     const { id, read } = parsed.data
 
@@ -41,6 +52,9 @@ export async function PATCH(request: Request) {
     return Response.json({ success: true })
   } catch (error) {
     console.error('Error updating alert:', error)
-    return Response.json({ error: 'Failed to update alert' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'ALERT_UPDATE_FAILED',
+      message: 'Failed to update alert',
+    }))
   }
 }

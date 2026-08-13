@@ -8,6 +8,8 @@ export interface UserDataDeletionRepository {
 
 export class DataDeletionConfirmationError extends Error {
   readonly code = 'DATA_DELETION_CONFIRMATION_REQUIRED'
+  readonly category = 'validation' as const
+  readonly retryable = false
 
   constructor() {
     super('Digite "excluir" para confirmar a exclusão de todos os dados')

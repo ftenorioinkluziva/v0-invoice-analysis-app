@@ -31,6 +31,8 @@ export function updatePreferences(
 
 export class PreferencesValidationError extends Error {
   readonly code = 'NO_PREFERENCE_FIELDS'
+  readonly category = 'validation' as const
+  readonly retryable = false
 
   constructor() {
     super('At least one preference field is required')

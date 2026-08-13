@@ -7,12 +7,18 @@ import { listInvoices } from '@/lib/invoice-list'
 import { importInvoice, InvoiceImportConflictError } from '@/lib/invoice-import'
 import { generatePriceAlerts } from '@/lib/price-alerts'
 import { createPgPriceAlertRepository } from '@/lib/price-alert-repository'
+import {
+  operationErrorResponse,
+  toOperationError,
+  unauthorizedError,
+  validationError,
+} from '@/lib/operation-error'
 
 export async function GET(request: Request) {
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const invoices = await withUserTransaction(userId, async (client) => {
@@ -21,7 +27,10 @@ export async function GET(request: Request) {
     return Response.json({ invoices })
   } catch (error) {
     console.error('Error fetching invoices:', error)
-    return Response.json({ error: 'Failed to fetch invoices' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'INVOICE_LIST_FAILED',
+      message: 'Failed to fetch invoices',
+    }))
   }
 }
 
@@ -29,12 +38,19 @@ export async function POST(request: Request) {
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const parsed = SaveInvoiceSchema.safeParse(await request.json())
     if (!parsed.success) {
-      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+      return operationErrorResponse(
+        validationError(
+          'INVALID_INVOICE_REQUEST',
+          'Invalid request',
+          parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: { details: parsed.error.flatten() } }
+      )
     }
     const result = await withUserTransaction(userId, async client => {
       const repository = createPgInvoiceRepository(client, userId)
@@ -55,13 +71,15 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     if (error instanceof InvoiceImportConflictError) {
-      return Response.json(
-        { error: error.message, duplicateInvoiceId: error.duplicateInvoiceId },
-        { status: 409 }
-      )
+      return operationErrorResponse(error, {
+        extra: { duplicateInvoiceId: error.duplicateInvoiceId },
+      })
     }
 
     console.error('Error saving invoice:', error)
-    return Response.json({ error: 'Failed to save invoice' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'INVOICE_IMPORT_FAILED',
+      message: 'Failed to save invoice',
+    }))
   }
 }

@@ -3,26 +3,35 @@ import { withUserTransaction } from '@/lib/session-sql'
 import { DeleteAllDataSchema } from '@/lib/validations'
 import { createPgUserDataDeletionRepository } from '@/lib/data-deletion-repository'
 import { deleteAllUserData } from '@/lib/data-deletion'
+import { operationErrorResponse, toOperationError, unauthorizedError, validationError } from '@/lib/operation-error'
 
 export async function DELETE(request: Request) {
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     let payload: unknown
     try {
       payload = await request.json()
     } catch {
-      return Response.json({ error: 'Confirmation required' }, { status: 400 })
+      return operationErrorResponse(validationError(
+        'DATA_DELETION_CONFIRMATION_REQUIRED',
+        'Confirmation required',
+        ['confirmation']
+      ))
     }
 
     const parsed = DeleteAllDataSchema.safeParse(payload)
     if (!parsed.success) {
-      return Response.json(
-        { error: 'Confirmation required', details: parsed.error.flatten() },
-        { status: 400 }
+      return operationErrorResponse(
+        validationError(
+          'DATA_DELETION_CONFIRMATION_REQUIRED',
+          'Confirmation required',
+          parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: { details: parsed.error.flatten() } }
       )
     }
 
@@ -36,6 +45,9 @@ export async function DELETE(request: Request) {
     return Response.json({ success: true, message: 'User data deleted successfully' })
   } catch (error) {
     console.error('Error deleting all data:', error)
-    return Response.json({ error: 'Failed to delete data' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'DATA_DELETION_FAILED',
+      message: 'Failed to delete data',
+    }))
   }
 }

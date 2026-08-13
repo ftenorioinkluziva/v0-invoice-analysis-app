@@ -70,6 +70,8 @@ export interface InvoiceImportRepository {
 
 export class InvoiceImportConflictError extends Error {
   readonly code = 'INVOICE_ALREADY_IMPORTED'
+  readonly category = 'conflict' as const
+  readonly retryable = false
   readonly duplicateInvoiceId: number
 
   constructor(duplicateInvoiceId: number) {
@@ -81,6 +83,8 @@ export class InvoiceImportConflictError extends Error {
 
 export class InvoiceImportValidationError extends Error {
   readonly code = 'INVALID_INVOICE_IMPORT'
+  readonly category = 'validation' as const
+  readonly retryable = false
   readonly invalidFields: string[]
 
   constructor(invalidFields: string[]) {
