@@ -1,10 +1,11 @@
 import { sqlForClient } from '@/lib/db'
-import { ExtractedInvoice } from '@/lib/types'
+import type { ExtractedInvoice } from '@/lib/types'
 import { SaveInvoiceSchema } from '@/lib/validations'
-import { normalizeProductName, categorizeProduct, validateItemPrices, extractUnit, buildComparablePricing } from '@/lib/invoice-utils'
+import { normalizeProductName } from '@/lib/invoice-utils'
 import { getSessionUserId } from '@/lib/auth-session'
-import { setAppUserId, withUserTransaction } from '@/lib/session-sql'
-import { getPool } from '@/lib/db-pool'
+import { withUserTransaction } from '@/lib/session-sql'
+import { createPgInvoiceRepository } from '@/lib/invoice-repository'
+import { importInvoice, InvoiceImportConflictError } from '@/lib/invoice-import'
 
 export async function GET(request: Request) {
   try {
@@ -51,141 +52,26 @@ export async function POST(request: Request) {
     if (!parsed.success) {
       return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
     }
-    const { data, filename } = parsed.data
+    const result = await withUserTransaction(userId, async client => {
+      const repository = createPgInvoiceRepository(client, userId)
+      return importInvoice(parsed.data, repository)
+    })
 
+    await generatePriceAlerts(parsed.data.data.items, userId)
 
-    const client = await getPool().connect()
-    // Seta app.user_id para isolamento RLS estrito
-    try {
-      await client.query('BEGIN')
-      await setAppUserId(client, userId)
-
-      // Upsert store — match by CNPJ when available, fallback to name
-      let storeId: number
-
-      if (data.store_cnpj) {
-        const result = await client.query(`
-          INSERT INTO stores (name, cnpj, address, user_id)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (user_id, cnpj) WHERE cnpj IS NOT NULL
-          DO UPDATE SET name = EXCLUDED.name
-          RETURNING id
-        `, [data.store_name, data.store_cnpj, data.store_address, userId])
-        storeId = result.rows[0].id
-      } else {
-        const existing = await client.query(`
-          SELECT id FROM stores WHERE name = $1 AND user_id = $2 LIMIT 1
-        `, [data.store_name, userId])
-        
-        if (existing.rows.length > 0) {
-          storeId = existing.rows[0].id
-        } else {
-          const result = await client.query(`
-            INSERT INTO stores (name, cnpj, address, user_id)
-            VALUES ($1, NULL, $2, $3)
-            RETURNING id
-          `, [data.store_name, data.store_address, userId])
-          storeId = result.rows[0].id
-        }
-      }
-
-      // Check for duplicate invoice
-      const duplicate = await client.query(`
-        SELECT id FROM invoices
-        WHERE user_id = $5 AND ((invoice_number IS NOT NULL AND invoice_number = $1)
-          OR (store_id = $2 AND purchase_date = $3 AND total_amount = $4))
-        LIMIT 1
-      `, [data.invoice_number, storeId, data.purchase_date, data.total_amount, userId])
-      
-      if (duplicate.rows.length > 0) {
-        await client.query('ROLLBACK')
-        client.release()
-        return Response.json(
-          { error: 'Nota fiscal já importada', duplicateInvoiceId: duplicate.rows[0].id },
-          { status: 409 }
-        )
-      }
-
-      const invoiceResult = await client.query(`
-        INSERT INTO invoices (store_id, invoice_number, purchase_date, total_amount, pdf_filename, user_id)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id
-      `, [storeId, data.invoice_number, data.purchase_date, data.total_amount, filename, userId])
-      const invoiceId = invoiceResult.rows[0].id
-
-      // Process items
-      for (const item of data.items) {
-        const validated = validateItemPrices(item)
-        const comparablePricing = buildComparablePricing(validated)
-        const normalizedName = normalizeProductName(validated.description)
-        const category = categorizeProduct(validated.description)
-
-        const productResult = await client.query(`
-          SELECT id FROM products WHERE normalized_name = $1 AND user_id = $2 LIMIT 1
-        `, [normalizedName, userId])
-
-        let productId: number
-
-        if (productResult.rows.length === 0) {
-          const newProduct = await client.query(`
-            INSERT INTO products (normalized_name, category, unit, user_id)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id
-          `, [normalizedName, category, extractUnit(validated.description), userId])
-          productId = newProduct.rows[0].id
-        } else {
-          productId = productResult.rows[0].id
-        }
-
-        await client.query(`
-          INSERT INTO invoice_items (
-            invoice_id,
-            product_id,
-            raw_description,
-            quantity,
-            unit_price,
-            total_price,
-            comparable_base_unit,
-            comparable_quantity_base,
-            comparable_unit_price,
-            measurement_source,
-            measurement_confidence,
-            user_id
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        `, [
-          invoiceId,
-          productId,
-          validated.description,
-          validated.quantity,
-          validated.unit_price,
-          validated.total_price,
-          comparablePricing.comparable_base_unit,
-          comparablePricing.comparable_quantity_base,
-          comparablePricing.comparable_unit_price,
-          comparablePricing.measurement_source,
-          comparablePricing.measurement_confidence,
-          userId,
-        ])
-      }
-
-      await client.query('COMMIT')
-      client.release()
-
-      // Check for price alerts
-      await generatePriceAlerts(data.items, userId)
-
-      return Response.json({ 
-        success: true, 
-        invoiceId,
-        message: `Invoice saved with ${data.items.length} items` 
-      })
-    } catch (txError) {
-      await client.query('ROLLBACK')
-      client.release()
-      throw txError
-    }
+    return Response.json({
+      success: true,
+      invoiceId: result.invoiceId,
+      message: `Invoice saved with ${result.itemCount} items`,
+    })
   } catch (error) {
+    if (error instanceof InvoiceImportConflictError) {
+      return Response.json(
+        { error: error.message, duplicateInvoiceId: error.duplicateInvoiceId },
+        { status: 409 }
+      )
+    }
+
     console.error('Error saving invoice:', error)
     return Response.json({ error: 'Failed to save invoice' }, { status: 500 })
   }
