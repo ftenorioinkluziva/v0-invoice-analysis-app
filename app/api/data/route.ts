@@ -1,5 +1,8 @@
 import { getSessionUserId } from '@/lib/auth-session'
 import { withUserTransaction } from '@/lib/session-sql'
+import { DeleteAllDataSchema } from '@/lib/validations'
+import { createPgUserDataDeletionRepository } from '@/lib/data-deletion-repository'
+import { deleteAllUserData } from '@/lib/data-deletion'
 
 export async function DELETE(request: Request) {
   try {
@@ -8,17 +11,27 @@ export async function DELETE(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await withUserTransaction(userId, async (client) => {
-      // Deletion order to respect foreign key constraints
-      await client.query('DELETE FROM alerts WHERE user_id = $1', [userId])
-      await client.query('DELETE FROM invoice_items WHERE user_id = $1', [userId])
-      await client.query('DELETE FROM shopping_list_items WHERE user_id = $1', [userId])
-      await client.query('DELETE FROM invoices WHERE user_id = $1', [userId])
-      await client.query('DELETE FROM shopping_lists WHERE user_id = $1', [userId])
-      await client.query('DELETE FROM products WHERE user_id = $1', [userId])
-      await client.query('DELETE FROM stores WHERE user_id = $1', [userId])
-      await client.query('DELETE FROM user_preferences WHERE user_id = $1', [userId])
-    })
+    let payload: unknown
+    try {
+      payload = await request.json()
+    } catch {
+      return Response.json({ error: 'Confirmation required' }, { status: 400 })
+    }
+
+    const parsed = DeleteAllDataSchema.safeParse(payload)
+    if (!parsed.success) {
+      return Response.json(
+        { error: 'Confirmation required', details: parsed.error.flatten() },
+        { status: 400 }
+      )
+    }
+
+    await withUserTransaction(userId, async client =>
+      deleteAllUserData(
+        createPgUserDataDeletionRepository(client, userId),
+        parsed.data
+      )
+    )
 
     return Response.json({ success: true, message: 'User data deleted successfully' })
   } catch (error) {

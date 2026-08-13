@@ -182,6 +182,8 @@ export default function ConfigPage() {
     try {
       const res = await fetchWithAuthRedirect('/api/data', {
         method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ confirmation: 'excluir' }),
       })
       
       if (!res.ok) {

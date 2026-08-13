@@ -55,6 +55,13 @@ export const UpdatePreferencesSchema = z.object({
   notify_weekly_summary: z.boolean().optional(),
 }).strict()
 
+export const DeleteAllDataSchema = z.object({
+  confirmation: z.string().trim().toLowerCase().refine(
+    value => value === 'excluir',
+    'Digite "excluir" para confirmar a exclusão de todos os dados'
+  ),
+}).strict()
+
 export const ComparableBaseUnitSchema = z.enum(['kg', 'L', 'un'])
 export const ProductGroupSuggestionStatusSchema = z.enum(['pending', 'accepted', 'rejected', 'superseded'])
 export const HISTORY_PERIOD_DAYS = [30, 90, 180] as const
