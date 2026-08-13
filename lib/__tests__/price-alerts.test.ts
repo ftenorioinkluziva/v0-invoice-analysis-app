@@ -13,7 +13,7 @@ function createRepository(overrides: Partial<PriceAlertRepository> = {}): PriceA
       { unitPrice: 6, purchaseDate: '2026-08-01' },
     ]),
     findProductId: vi.fn().mockResolvedValue(10),
-    createPriceIncreaseAlert: vi.fn().mockResolvedValue(undefined),
+    createPriceIncreaseAlert: vi.fn().mockResolvedValue(true),
     ...overrides,
   }
 }
@@ -22,11 +22,12 @@ describe('price alert use case', () => {
   it('creates an alert when the current price exceeds the configured threshold', async () => {
     const repository = createRepository()
 
-    const result = await generatePriceAlerts(items, repository)
+    const result = await generatePriceAlerts(items, repository, { sourceInvoiceId: 200 })
 
     expect(result).toEqual({ created: 1 })
     expect(repository.createPriceIncreaseAlert).toHaveBeenCalledWith({
       productId: 10,
+      dedupeKey: '200:10',
       message: 'Leite integral 1L aumentou 33.3%',
       data: { previous_price: 6, current_price: 8, variation: expect.closeTo(33.333333, 5) },
     })
@@ -37,7 +38,7 @@ describe('price alert use case', () => {
       getPreferences: vi.fn().mockResolvedValue({ threshold: 1, notifyPriceIncrease: false }),
     })
 
-    await expect(generatePriceAlerts(items, repository)).resolves.toEqual({ created: 0 })
+    await expect(generatePriceAlerts(items, repository, { sourceInvoiceId: 200 })).resolves.toEqual({ created: 0 })
     expect(repository.getPriceHistory).not.toHaveBeenCalled()
     expect(repository.createPriceIncreaseAlert).not.toHaveBeenCalled()
   })
@@ -46,8 +47,8 @@ describe('price alert use case', () => {
     const noHistory = createRepository({ getPriceHistory: vi.fn().mockResolvedValue([]) })
     const noProduct = createRepository({ findProductId: vi.fn().mockResolvedValue(null) })
 
-    await expect(generatePriceAlerts(items, noHistory)).resolves.toEqual({ created: 0 })
-    await expect(generatePriceAlerts(items, noProduct)).resolves.toEqual({ created: 0 })
+    await expect(generatePriceAlerts(items, noHistory, { sourceInvoiceId: 200 })).resolves.toEqual({ created: 0 })
+    await expect(generatePriceAlerts(items, noProduct, { sourceInvoiceId: 200 })).resolves.toEqual({ created: 0 })
     expect(noProduct.createPriceIncreaseAlert).not.toHaveBeenCalled()
   })
 })

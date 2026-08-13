@@ -60,7 +60,8 @@ export async function POST(request: Request) {
     await withUserTransaction(userId, async client => {
       await generatePriceAlerts(
         parsed.data.data.items,
-        createPgPriceAlertRepository(client, userId)
+        createPgPriceAlertRepository(client, userId),
+        { sourceInvoiceId: result.invoiceId }
       )
     })
 

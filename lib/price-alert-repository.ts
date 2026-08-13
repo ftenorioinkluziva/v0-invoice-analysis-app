@@ -46,10 +46,19 @@ export function createPgPriceAlertRepository(
     },
 
     async createPriceIncreaseAlert(alert) {
-      await client.query(`
-        INSERT INTO alerts (product_id, alert_type, message, data, user_id)
-        VALUES ($1, 'price_increase', $2, $3, $4)
-      `, [alert.productId, alert.message, JSON.stringify(alert.data), userId])
+      const result = await client.query(`
+        INSERT INTO alerts (product_id, alert_type, message, data, user_id, dedupe_key)
+        VALUES ($1, 'price_increase', $2, $3, $4, $5)
+        ON CONFLICT (user_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
+        RETURNING id
+      `, [
+        alert.productId,
+        alert.message,
+        JSON.stringify(alert.data),
+        userId,
+        alert.dedupeKey,
+      ])
+      return result.rows.length > 0
     },
   }
 }

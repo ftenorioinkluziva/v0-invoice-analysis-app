@@ -13,6 +13,7 @@ export type PriceHistoryEntry = {
 
 export type PriceAlert = {
   productId: number
+  dedupeKey: string
   message: string
   data: {
     previous_price: number
@@ -25,7 +26,7 @@ export interface PriceAlertRepository {
   getPreferences(): Promise<PriceAlertPreferences>
   getPriceHistory(normalizedName: string): Promise<PriceHistoryEntry[]>
   findProductId(normalizedName: string): Promise<number | null>
-  createPriceIncreaseAlert(alert: PriceAlert): Promise<void>
+  createPriceIncreaseAlert(alert: PriceAlert): Promise<boolean>
 }
 
 export type PriceAlertResult = {
@@ -34,7 +35,8 @@ export type PriceAlertResult = {
 
 export async function generatePriceAlerts(
   items: ExtractedInvoice['items'],
-  repository: PriceAlertRepository
+  repository: PriceAlertRepository,
+  context: { sourceInvoiceId: number }
 ): Promise<PriceAlertResult> {
   const preferences = await repository.getPreferences()
   if (!preferences.notifyPriceIncrease) return { created: 0 }
@@ -56,12 +58,13 @@ export async function generatePriceAlerts(
     const productId = await repository.findProductId(normalizedName)
     if (productId === null) continue
 
-    await repository.createPriceIncreaseAlert({
+    const wasCreated = await repository.createPriceIncreaseAlert({
       productId,
+      dedupeKey: `${context.sourceInvoiceId}:${productId}`,
       message: `${item.description} aumentou ${variation.toFixed(1)}%`,
       data: { previous_price: previousPrice, current_price: currentPrice, variation },
     })
-    created += 1
+    if (wasCreated) created += 1
   }
 
   return { created }

@@ -12,6 +12,8 @@ services:
       - invoice-analysis-postgres:/var/lib/postgresql/data
       - ./scripts/010-create-runtime-role.sh:/docker-entrypoint-initdb.d/010-create-runtime-role.sh:ro
       - ./scripts/011-arq-01-rls-hardening.sql:/docker-entrypoint-initdb.d/011-arq-01-rls-hardening.sql:ro
+      - ./scripts/012-alert-idempotency.sql:/docker-entrypoint-initdb.d/012-alert-idempotency.sql:ro
+      - ./scripts/verify-arq-04.sql:/opt/invoice-analysis/verify-arq-04.sql:ro
       - ./scripts/verify-arq-01-rls.sql:/opt/invoice-analysis/verify-arq-01-rls.sql:ro
     ports:
       - "5436:5432"
