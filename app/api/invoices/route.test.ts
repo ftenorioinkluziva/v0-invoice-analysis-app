@@ -49,6 +49,10 @@ describe('POST /api/invoices', () => {
           return { rows: [] }
         }
 
+        if (queryText.includes('SELECT alert_threshold, notify_price_increase')) {
+          return { rows: [{ alert_threshold: 15, notify_price_increase: false }] }
+        }
+
         if (queryText.includes('INSERT INTO stores')) {
           return { rows: [{ id: 100 }] }
         }

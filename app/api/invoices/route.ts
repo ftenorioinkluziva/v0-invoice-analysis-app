@@ -1,11 +1,11 @@
 import { sqlForClient } from '@/lib/db'
-import type { ExtractedInvoice } from '@/lib/types'
 import { SaveInvoiceSchema } from '@/lib/validations'
-import { normalizeProductName } from '@/lib/invoice-utils'
 import { getSessionUserId } from '@/lib/auth-session'
 import { withUserTransaction } from '@/lib/session-sql'
 import { createPgInvoiceRepository } from '@/lib/invoice-repository'
 import { importInvoice, InvoiceImportConflictError } from '@/lib/invoice-import'
+import { generatePriceAlerts } from '@/lib/price-alerts'
+import { createPgPriceAlertRepository } from '@/lib/price-alert-repository'
 
 export async function GET(request: Request) {
   try {
@@ -57,7 +57,12 @@ export async function POST(request: Request) {
       return importInvoice(parsed.data, repository)
     })
 
-    await generatePriceAlerts(parsed.data.data.items, userId)
+    await withUserTransaction(userId, async client => {
+      await generatePriceAlerts(
+        parsed.data.data.items,
+        createPgPriceAlertRepository(client, userId)
+      )
+    })
 
     return Response.json({
       success: true,
@@ -75,57 +80,4 @@ export async function POST(request: Request) {
     console.error('Error saving invoice:', error)
     return Response.json({ error: 'Failed to save invoice' }, { status: 500 })
   }
-}
-
-
-async function generatePriceAlerts(items: ExtractedInvoice['items'], userId: string) {
-  await withUserTransaction(userId, async (client) => {
-  const sql = sqlForClient(client)
-  // Obter configurações de notificação dinamicamente
-  const prefsConf = await sql`SELECT alert_threshold, notify_price_increase FROM user_preferences WHERE user_id = ${userId} LIMIT 1`
-  const threshold = prefsConf.length > 0 ? Number(prefsConf[0].alert_threshold) : 15
-  const notifyPriceIncrease = prefsConf.length > 0 ? prefsConf[0].notify_price_increase : true
-
-  if (!notifyPriceIncrease) return;
-
-  for (const item of items) {
-    const normalizedName = normalizeProductName(item.description)
-    
-    // Get historical prices for this product
-    const history = await sql`
-      SELECT ii.unit_price, i.purchase_date
-      FROM invoice_items ii
-      JOIN products p ON ii.product_id = p.id
-      JOIN invoices i ON ii.invoice_id = i.id
-      WHERE p.normalized_name = ${normalizedName} AND p.user_id = ${userId} AND ii.user_id = ${userId} AND i.user_id = ${userId}
-      ORDER BY i.purchase_date DESC
-      LIMIT 5
-    `
-
-    if (history.length >= 2) {
-      const previousPrice = Number(history[1].unit_price)
-      const currentPrice = item.unit_price
-      const variation = ((currentPrice - previousPrice) / previousPrice) * 100
-
-      if (variation > threshold) {
-        const productResult = await sql`
-          SELECT id FROM products WHERE normalized_name = ${normalizedName} AND user_id = ${userId} LIMIT 1
-        `
-        
-        if (productResult.length > 0) {
-          await sql`
-            INSERT INTO alerts (product_id, alert_type, message, data, user_id)
-            VALUES (
-              ${productResult[0].id}, 
-              'price_increase',
-              ${`${item.description} aumentou ${variation.toFixed(1)}%`},
-              ${JSON.stringify({ previous_price: previousPrice, current_price: currentPrice, variation })},
-              ${userId}
-            )
-          `
-        }
-      }
-    }
-  }
-  })
 }
