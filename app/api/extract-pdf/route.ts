@@ -5,6 +5,12 @@ import {
   type InvoiceExtractionError,
 } from '@/lib/invoice-extraction'
 import { createInvoiceExtractor } from '@/lib/ai/invoice-extractor'
+import {
+  operationErrorResponse,
+  toOperationError,
+  unauthorizedError,
+  validationError,
+} from '@/lib/operation-error'
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 export const SUPPORTED_FILE_TYPES = INVOICE_EXTRACTION_FILE_TYPES
@@ -62,26 +68,23 @@ export async function POST(request: Request) {
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     if (!file) {
-      return Response.json(
-        {
-          error: 'Selecione um PDF ou imagem de nota fiscal para importar.',
-          code: 'FILE_REQUIRED',
-        },
-        { status: 400 }
-      )
+      return operationErrorResponse(validationError(
+        'FILE_REQUIRED',
+        'Selecione um PDF ou imagem de nota fiscal para importar.'
+      ))
     }
 
     const fileValidation = validateUploadFile(file)
 
     if (!fileValidation.valid) {
-      return Response.json(
-        { error: fileValidation.message, code: fileValidation.code },
+      return operationErrorResponse(
+        validationError(fileValidation.code, fileValidation.message),
         { status: fileValidation.statusCode }
       )
     }
@@ -97,22 +100,16 @@ export async function POST(request: Request) {
 
     if (!extraction.ok) {
       logExtractionError(extraction.error)
-      return Response.json(
-        { error: extraction.error.message, code: extraction.error.code },
-        { status: toHttpStatus(extraction.error) }
-      )
+      return operationErrorResponse(extraction.error, { status: toHttpStatus(extraction.error) })
     }
 
     return Response.json({ success: true, data: extraction.value, filename: file.name })
   } catch (error) {
     console.error('[extract-pdf] error:', error instanceof Error ? error.message : 'Unknown error')
-    return Response.json(
-      {
-        error: 'Não foi possível processar o arquivo agora. Tente novamente em instantes.',
-        code: 'EXTRACT_UNKNOWN_ERROR',
-      },
-      { status: 500 }
-    )
+    return operationErrorResponse(toOperationError(error, {
+      code: 'EXTRACT_UNKNOWN_ERROR',
+      message: 'Não foi possível processar o arquivo agora. Tente novamente em instantes.',
+    }))
   }
 }
 

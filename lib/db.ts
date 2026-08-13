@@ -1,6 +1,5 @@
-import { Pool, type PoolClient, type QueryResultRow } from 'pg'
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
+import type { PoolClient, QueryResultRow } from 'pg'
+import { getPool } from '@/lib/db-pool'
 
 function queryTemplate(
   query: (text: string, values: unknown[]) => Promise<{ rows: QueryResultRow[] }>,
@@ -15,7 +14,7 @@ function queryTemplate(
 }
 
 export function sql(strings: TemplateStringsArray, ...values: unknown[]): Promise<QueryResultRow[]> {
-  return queryTemplate((text, params) => pool.query(text, params), strings, values)
+  return queryTemplate((text, params) => getPool().query(text, params), strings, values)
 }
 
 export function sqlForClient(client: PoolClient) {

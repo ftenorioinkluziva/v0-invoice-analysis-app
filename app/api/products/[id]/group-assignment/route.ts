@@ -6,6 +6,13 @@ import {
   AssignProductGroupSchema,
   ProductGroupAssignmentResponseSchema,
 } from '@/lib/validations'
+import {
+  notFoundError,
+  operationErrorResponse,
+  toOperationError,
+  unauthorizedError,
+  validationError,
+} from '@/lib/operation-error'
 
 type ProductRow = {
   id: number
@@ -26,35 +33,42 @@ export async function POST(
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const { id } = await params
     const productId = Number(id)
 
     if (!Number.isInteger(productId) || productId <= 0) {
-      return Response.json({ error: 'Product not found' }, { status: 404 })
+      return operationErrorResponse(notFoundError('PRODUCT_NOT_FOUND', 'Product not found'))
     }
 
     const body = await readJsonBody(request)
     if (body === null) {
-      return Response.json({ error: 'Invalid request' }, { status: 400 })
+      return operationErrorResponse(validationError('INVALID_PRODUCT_GROUP_ASSIGNMENT', 'Invalid request'))
     }
 
     const parsed = AssignProductGroupSchema.safeParse(body)
     if (!parsed.success) {
-      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+      return operationErrorResponse(
+        validationError(
+          'INVALID_PRODUCT_GROUP_ASSIGNMENT',
+          'Invalid request',
+          parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: { details: parsed.error.flatten() } }
+      )
     }
 
     return await withUserTransaction(userId, async (client) => {
       const product = await getProduct(client, productId, userId)
       if (!product) {
-        return Response.json({ error: 'Product not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('PRODUCT_NOT_FOUND', 'Product not found'))
       }
 
       const group = await getGroup(client, parsed.data.group_id, userId)
       if (!group) {
-        return Response.json({ error: 'Product group not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('PRODUCT_GROUP_NOT_FOUND', 'Product group not found'))
       }
 
       if (product.comparable_group_id === group.id) {
@@ -62,7 +76,12 @@ export async function POST(
       }
 
       if (product.comparable_group_id !== null) {
-        return Response.json({ error: 'Product already assigned to another group' }, { status: 409 })
+        return operationErrorResponse({
+          code: 'PRODUCT_GROUP_ASSIGNMENT_CONFLICT',
+          category: 'conflict',
+          message: 'Product already assigned to another group',
+          retryable: false,
+        })
       }
 
       const latestComparableEvidence = await client.query<{ comparable_base_unit: 'kg' | 'L' }>(
@@ -82,11 +101,17 @@ export async function POST(
       const evidenceUnit = latestComparableEvidence.rows[0]?.comparable_base_unit ?? null
 
       if (!evidenceUnit && !parsed.data.allow_missing_comparable_evidence) {
-        return Response.json({ error: 'Missing comparable evidence for product' }, { status: 400 })
+        return operationErrorResponse(validationError(
+          'MISSING_COMPARABLE_EVIDENCE',
+          'Missing comparable evidence for product'
+        ))
       }
 
       if (evidenceUnit && evidenceUnit !== group.base_unit) {
-        return Response.json({ error: 'Comparable evidence base unit is incompatible with product group' }, { status: 400 })
+        return operationErrorResponse(validationError(
+          'INCOMPATIBLE_COMPARABLE_EVIDENCE',
+          'Comparable evidence base unit is incompatible with product group'
+        ))
       }
 
       await client.query(
@@ -118,7 +143,10 @@ export async function POST(
     })
   } catch (error) {
     console.error('Error assigning product group:', error)
-    return Response.json({ error: 'Failed to assign product group' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'PRODUCT_GROUP_ASSIGNMENT_FAILED',
+      message: 'Failed to assign product group',
+    }))
   }
 }
 
@@ -129,20 +157,20 @@ export async function DELETE(
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const { id } = await params
     const productId = Number(id)
 
     if (!Number.isInteger(productId) || productId <= 0) {
-      return Response.json({ error: 'Product not found' }, { status: 404 })
+      return operationErrorResponse(notFoundError('PRODUCT_NOT_FOUND', 'Product not found'))
     }
 
     return await withUserTransaction(userId, async (client) => {
       const product = await getProduct(client, productId, userId)
       if (!product) {
-        return Response.json({ error: 'Product not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('PRODUCT_NOT_FOUND', 'Product not found'))
       }
 
       if (product.comparable_group_id === null) {
@@ -176,7 +204,10 @@ export async function DELETE(
     })
   } catch (error) {
     console.error('Error removing product group assignment:', error)
-    return Response.json({ error: 'Failed to remove product group assignment' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'PRODUCT_GROUP_DISASSIGNMENT_FAILED',
+      message: 'Failed to remove product group assignment',
+    }))
   }
 }
 

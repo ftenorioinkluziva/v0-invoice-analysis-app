@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth'
-import { Pool } from 'pg'
+import { getPool } from '@/lib/db-pool'
 
 export const auth = betterAuth({
   baseURL:
@@ -7,7 +7,7 @@ export const auth = betterAuth({
     process.env.NEXT_PUBLIC_APP_URL ??
     'http://localhost:3000',
   secret: process.env.BETTER_AUTH_SECRET,
-  database: new Pool({ connectionString: process.env.DATABASE_URL! }),
+  database: getPool(),
   emailAndPassword: {
     enabled: true,
   },

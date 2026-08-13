@@ -1,6 +1,13 @@
 import { getSessionUserId } from '@/lib/auth-session'
 import { ProductResponseSchema, UpdateProductSchema, parseHistoryPeriodDaysParam } from '@/lib/validations'
 import { withUserTransaction } from '@/lib/session-sql'
+import {
+  notFoundError,
+  operationErrorResponse,
+  toOperationError,
+  unauthorizedError,
+  validationError,
+} from '@/lib/operation-error'
 
 export async function GET(
   request: Request,
@@ -10,20 +17,20 @@ export async function GET(
   const periodDaysResult = parseHistoryPeriodDaysParam(searchParams.get('period_days'))
 
   if (!periodDaysResult.success) {
-    return Response.json({ error: 'Invalid period_days' }, { status: 400 })
+    return operationErrorResponse(validationError('INVALID_PERIOD_DAYS', 'Invalid period_days'))
   }
 
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const { id } = await params
     const productId = Number(id)
 
     if (!Number.isInteger(productId) || productId <= 0) {
-      return Response.json({ error: 'Product not found' }, { status: 404 })
+      return operationErrorResponse(notFoundError('PRODUCT_NOT_FOUND', 'Product not found'))
     }
 
     return await withUserTransaction(userId, async (client) => {
@@ -104,7 +111,7 @@ export async function GET(
 
       const row = result.rows[0]
       if (!row.product) {
-        return Response.json({ error: 'Product not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('PRODUCT_NOT_FOUND', 'Product not found'))
       }
 
       const p = row.product
@@ -141,7 +148,10 @@ export async function GET(
     })
   } catch (error) {
     console.error('Error fetching product history:', error)
-    return Response.json({ error: 'Failed to fetch product history' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'PRODUCT_HISTORY_FAILED',
+      message: 'Failed to fetch product history',
+    }))
   }
 }
 
@@ -152,24 +162,31 @@ export async function PATCH(
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const { id } = await params
     const productId = Number(id)
 
     if (!Number.isInteger(productId) || productId <= 0) {
-      return Response.json({ error: 'Product not found' }, { status: 404 })
+      return operationErrorResponse(notFoundError('PRODUCT_NOT_FOUND', 'Product not found'))
     }
 
     const body = await readJsonBody(request)
     if (body === null) {
-      return Response.json({ error: 'Invalid request' }, { status: 400 })
+      return operationErrorResponse(validationError('INVALID_PRODUCT_REQUEST', 'Invalid request'))
     }
 
     const parsed = UpdateProductSchema.safeParse(body)
     if (!parsed.success || (parsed.data.brand === undefined && parsed.data.units_per_pack === undefined)) {
-      return Response.json({ error: 'Invalid request', details: parsed.success ? undefined : parsed.error.flatten() }, { status: 400 })
+      return operationErrorResponse(
+        validationError(
+          'INVALID_PRODUCT_REQUEST',
+          'Invalid request',
+          parsed.success ? undefined : parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: parsed.success ? undefined : { details: parsed.error.flatten() } }
+      )
     }
 
     const setClauses: string[] = []
@@ -192,13 +209,16 @@ export async function PATCH(
         values
       )
       if (result.rows.length === 0) {
-        return Response.json({ error: 'Product not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('PRODUCT_NOT_FOUND', 'Product not found'))
       }
       return Response.json(ProductResponseSchema.parse(result.rows[0]))
     })
   } catch (error) {
     console.error('Error updating product:', error)
-    return Response.json({ error: 'Failed to update product' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'PRODUCT_UPDATE_FAILED',
+      message: 'Failed to update product',
+    }))
   }
 }
 
