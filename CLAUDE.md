@@ -40,7 +40,7 @@ PDF upload → POST /api/extract-pdf (Gemini 2.5 Flash via AI SDK)
 
 ### Key Layers
 
-**`lib/db.ts`** — Neon serverless client. Single `sql` tagged-template export used directly in all route handlers. No ORM. Also exports DB entity types (`Store`, `Product`, `Invoice`, `InvoiceItem`, `ShoppingList`, `ShoppingListItem`, `Alert`, `UserPreference`).
+**`lib/db.ts`** — PostgreSQL `pg` client. Single `sql` tagged-template export used directly in route handlers. No ORM. Also exports DB entity types (`Store`, `Product`, `Invoice`, `InvoiceItem`, `ShoppingList`, `ShoppingListItem`, `Alert`, `UserPreference`).
 
 **`lib/types.ts`** — Source of truth for Zod schemas. `ExtractedInvoiceSchema` defines the AI extraction contract. `DashboardStats` is the analytics API response shape.
 
@@ -134,7 +134,7 @@ user_preferences     (id, user_id, alert_threshold: default 15%, notify_price_in
 - **AI SDK v6** (`ai` + `@ai-sdk/google`) with `generateText` + `Output.object()` for structured extraction
 - **Google Gemini 2.5 Flash** for PDF/image extraction (vision multimodal)
 - **Better-auth v1** for authentication (email/password + Google OAuth)
-- **Neon Postgres** (`@neondatabase/serverless`) via raw SQL tagged templates
+- **PostgreSQL** (`pg`) via pools and parameterized raw SQL
 - **SWR v2** for client-side data fetching
 - **Recharts** for spending charts
 - **Zod** for runtime validation of AI output and API requests

@@ -1,5 +1,5 @@
 import { sql } from '@/lib/db'
-import { Pool } from '@neondatabase/serverless'
+import { Pool } from 'pg'
 import { ExtractedInvoice } from '@/lib/types'
 import { SaveInvoiceSchema } from '@/lib/validations'
 import { normalizeProductName, categorizeProduct, validateItemPrices, extractUnit, buildComparablePricing } from '@/lib/invoice-utils'

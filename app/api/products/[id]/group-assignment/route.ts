@@ -1,4 +1,4 @@
-import { PoolClient } from '@neondatabase/serverless'
+import { PoolClient } from 'pg'
 import { getPool } from '@/lib/db-pool'
 import { getSessionUserId } from '@/lib/auth-session'
 import { setAppUserId } from '@/lib/session-sql'

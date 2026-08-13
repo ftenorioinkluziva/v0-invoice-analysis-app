@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: invoice-analysis-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-invoice_analysis}
+      POSTGRES_USER: ${POSTGRES_USER:-invoice_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-invoice_pass}
+    volumes:
+      - invoice-analysis-postgres:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-invoice_app} -d ${POSTGRES_DB:-invoice_analysis}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: invoice-analysis-app:local
+    container_name: invoice-analysis-app
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-invoice_app}:${POSTGRES_PASSWORD:-invoice_pass}@db:5432/${POSTGRES_DB:-invoice_analysis}
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3005:3000"
+
+volumes:
+  invoice-analysis-postgres:

@@ -1,4 +1,4 @@
-import { Pool } from '@neondatabase/serverless'
+import { Pool } from 'pg'
 
 let _pool: Pool | null = null
 

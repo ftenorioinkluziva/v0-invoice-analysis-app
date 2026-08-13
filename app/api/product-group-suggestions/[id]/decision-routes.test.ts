@@ -12,7 +12,7 @@ vi.mock('@/lib/session-sql', () => ({
   setAppUserId,
 }))
 
-vi.mock('@neondatabase/serverless', () => ({
+vi.mock('pg', () => ({
   Pool: vi.fn(function MockPool() {
     return {
       connect,

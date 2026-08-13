@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { sql } from '@/lib/db'
-import { Pool } from '@neondatabase/serverless'
+import { Pool } from 'pg'
 import { getSessionUserId } from '@/lib/auth-session'
 import { setAppUserId } from '@/lib/session-sql'
 

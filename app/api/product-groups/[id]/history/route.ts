@@ -1,4 +1,4 @@
-import { Pool } from '@neondatabase/serverless'
+import { Pool } from 'pg'
 import { getSessionUserId } from '@/lib/auth-session'
 import { isMissingRelationError } from '@/lib/db-errors'
 import { setAppUserId } from '@/lib/session-sql'

@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth'
-import { Pool } from '@neondatabase/serverless'
+import { Pool } from 'pg'
 
 export const auth = betterAuth({
   baseURL:

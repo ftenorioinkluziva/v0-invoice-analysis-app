@@ -1,4 +1,4 @@
-import type { PoolClient } from '@neondatabase/serverless'
+import type { PoolClient } from 'pg'
 import { buildComparablePricing } from './invoice-utils'
 
 type RawItem = {

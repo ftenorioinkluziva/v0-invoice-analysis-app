@@ -1,4 +1,4 @@
-import { PoolClient } from '@neondatabase/serverless'
+import { PoolClient } from 'pg'
 
 /**
  * Seta a variável de sessão app.user_id para isolamento RLS estrito.

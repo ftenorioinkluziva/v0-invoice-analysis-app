@@ -41,7 +41,7 @@ GOOGLE_CLIENT_SECRET="..."                  # OAuth (optional)
 
 ## Key Architecture Facts
 
-- **No ORM** — Raw SQL via `@neondatabase/serverless` tagged templates
+- **No ORM** — Raw SQL via `pg` pools and parameterized queries
 - **AI Extraction** — Uses `ai` SDK with `Output.object(ExtractedInvoiceSchema)` for structured extraction
 - **Auth** — Better-auth v1 with email/password + Google OAuth
 - **RLS** — Strict `app.user_id` isolation; all protected routes call `setAppUserId(userId)` before queries

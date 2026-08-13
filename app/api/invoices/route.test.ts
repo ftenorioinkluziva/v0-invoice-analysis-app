@@ -17,7 +17,7 @@ vi.mock('@/lib/db', () => ({
   sql,
 }))
 
-vi.mock('@neondatabase/serverless', () => ({
+vi.mock('pg', () => ({
   Pool: vi.fn(function MockPool() {
     return {
       connect,

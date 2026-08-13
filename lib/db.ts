@@ -1,6 +1,14 @@
-import { neon } from '@neondatabase/serverless'
+import { Pool, type QueryResultRow } from 'pg'
 
-export const sql = neon(process.env.DATABASE_URL!)
+const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
+
+export function sql(strings: TemplateStringsArray, ...values: unknown[]): Promise<QueryResultRow[]> {
+  const text = strings.reduce(
+    (acc, str, i) => acc + str + (i < values.length ? `$${i + 1}` : ''),
+    ''
+  )
+  return pool.query(text, values).then((r) => r.rows)
+}
 
 export type Store = {
   id: number

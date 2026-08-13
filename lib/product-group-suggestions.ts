@@ -1,4 +1,4 @@
-import type { PoolClient } from '@neondatabase/serverless'
+import type { PoolClient } from 'pg'
 import { ComparableBaseUnitSchema, ProductGroupSuggestionResponseSchema } from '@/lib/validations'
 
 export const PRODUCT_GROUP_SUGGESTION_THRESHOLD = 0.75

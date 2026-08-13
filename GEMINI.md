@@ -15,7 +15,7 @@ The project was initially bootstrapped using [v0.dev](https://v0.app) and seems 
 *   **UI:** React, Shadcn UI, Radix UI, Tailwind CSS
 *   **Styling:** Tailwind CSS
 *   **Authentication:** `better-auth` for email/password and Google social login.
-*   **Database:** Serverless PostgreSQL (likely Neon, based on `@neondatabase/serverless` dependency).
+*   **Database:** PostgreSQL via the `pg` package.
 *   **PDF Processing:** `pdf-parse` on the server-side.
 *   **AI/LLM:** The `@ai-sdk/google` package is included, suggesting that Google's AI (Gemini) is used for data extraction or analysis from the invoices.
 *   **Testing:**
