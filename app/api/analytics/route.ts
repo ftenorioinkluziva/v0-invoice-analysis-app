@@ -1,6 +1,7 @@
-import { sql } from '@/lib/db'
+import { sqlForClient } from '@/lib/db'
 import { DashboardStats } from '@/lib/types'
 import { getSessionUserId } from '@/lib/auth-session'
+import { withUserTransaction } from '@/lib/session-sql'
 
 export async function GET(request: Request) {
   try {
@@ -14,6 +15,9 @@ export async function GET(request: Request) {
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
       .toISOString()
       .slice(0, 7)
+
+    const stats = await withUserTransaction(userId, async (client) => {
+      const sql = sqlForClient(client)
 
     // Total spent this month
     const currentMonthSpent = await sql`
@@ -144,6 +148,9 @@ export async function GET(request: Request) {
         total: Number(row.total),
       })),
     }
+
+      return stats
+    })
 
     return Response.json(stats)
   } catch (error) {

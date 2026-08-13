@@ -7,8 +7,12 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-invoice_analysis}
       POSTGRES_USER: ${POSTGRES_USER:-invoice_app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-invoice_pass}
+      POSTGRES_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:-invoice_runtime_pass}
     volumes:
       - invoice-analysis-postgres:/var/lib/postgresql/data
+      - ./scripts/010-create-runtime-role.sh:/docker-entrypoint-initdb.d/010-create-runtime-role.sh:ro
+      - ./scripts/011-arq-01-rls-hardening.sql:/docker-entrypoint-initdb.d/011-arq-01-rls-hardening.sql:ro
+      - ./scripts/verify-arq-01-rls.sql:/opt/invoice-analysis/verify-arq-01-rls.sql:ro
     ports:
       - "5436:5432"
     healthcheck:
@@ -27,7 +31,7 @@ services:
     env_file:
       - .env.docker
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-invoice_app}:${POSTGRES_PASSWORD:-invoice_pass}@db:5432/${POSTGRES_DB:-invoice_analysis}
+      DATABASE_URL: postgresql://invoice_runtime:${POSTGRES_RUNTIME_PASSWORD:-invoice_runtime_pass}@db:5432/${POSTGRES_DB:-invoice_analysis}
       PORT: 3000
     depends_on:
       db:

@@ -1,6 +1,6 @@
-import { getPool } from '@/lib/db-pool'
 import { CreateShoppingListSchema } from '@/lib/validations'
 import { getSessionUserId } from '@/lib/auth-session'
+import { withUserTransaction } from '@/lib/session-sql'
 
 export async function GET(request: Request) {
   try {
@@ -9,8 +9,7 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const client = await getPool().connect()
-    try {
+    return await withUserTransaction(userId, async (client) => {
       const result = await client.query(
         `
           SELECT
@@ -30,9 +29,7 @@ export async function GET(request: Request) {
         [userId]
       )
       return Response.json({ lists: result.rows })
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error fetching shopping lists:', error)
     return Response.json({ error: 'Failed to fetch shopping lists' }, { status: 500 })
@@ -52,8 +49,7 @@ export async function POST(request: Request) {
     }
     const { name } = parsed.data
 
-    const client = await getPool().connect()
-    try {
+    return await withUserTransaction(userId, async (client) => {
       const result = await client.query(
         `INSERT INTO shopping_lists (name, status, user_id)
          VALUES ($1, 'active', $2)
@@ -61,9 +57,7 @@ export async function POST(request: Request) {
         [name || 'Nova Lista', userId]
       )
       return Response.json({ list: result.rows[0] })
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error creating shopping list:', error)
     return Response.json({ error: 'Failed to create shopping list' }, { status: 500 })

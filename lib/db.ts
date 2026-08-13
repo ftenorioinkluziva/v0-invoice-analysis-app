@@ -1,13 +1,26 @@
-import { Pool, type QueryResultRow } from 'pg'
+import { Pool, type PoolClient, type QueryResultRow } from 'pg'
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
 
-export function sql(strings: TemplateStringsArray, ...values: unknown[]): Promise<QueryResultRow[]> {
+function queryTemplate(
+  query: (text: string, values: unknown[]) => Promise<{ rows: QueryResultRow[] }>,
+  strings: TemplateStringsArray,
+  values: unknown[]
+): Promise<QueryResultRow[]> {
   const text = strings.reduce(
     (acc, str, i) => acc + str + (i < values.length ? `$${i + 1}` : ''),
     ''
   )
-  return pool.query(text, values).then((r) => r.rows)
+  return query(text, values).then((r) => r.rows)
+}
+
+export function sql(strings: TemplateStringsArray, ...values: unknown[]): Promise<QueryResultRow[]> {
+  return queryTemplate((text, params) => pool.query(text, params), strings, values)
+}
+
+export function sqlForClient(client: PoolClient) {
+  return (strings: TemplateStringsArray, ...values: unknown[]) =>
+    queryTemplate((text, params) => client.query(text, params), strings, values)
 }
 
 export type Store = {

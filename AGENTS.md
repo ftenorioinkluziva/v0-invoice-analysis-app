@@ -44,7 +44,7 @@ GOOGLE_CLIENT_SECRET="..."                  # OAuth (optional)
 - **No ORM** — Raw SQL via `pg` pools and parameterized queries
 - **AI Extraction** — Uses `ai` SDK with `Output.object(ExtractedInvoiceSchema)` for structured extraction
 - **Auth** — Better-auth v1 with email/password + Google OAuth
-- **RLS** — Strict `app.user_id` isolation; all protected routes call `setAppUserId(userId)` before queries
+- **RLS** — Strict `app.user_id` isolation; protected routes use `withUserTransaction(userId, operation)` so context and queries share one transaction
 - **Language** — Portuguese (pt-BR); all UI strings should be in Portuguese
 - **Monetary** — BRL only; use `Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })`
 
@@ -58,12 +58,13 @@ GOOGLE_CLIENT_SECRET="..."                  # OAuth (optional)
 
 ```typescript
 import { getSessionUserId } from '@/lib/auth-session'
-import { setAppUserId } from '@/lib/session-sql'
+import { withUserTransaction } from '@/lib/session-sql'
 
 export async function GET(request: Request) {
   const userId = await getSessionUserId(request)
-  setAppUserId(userId)
-  // ... queries with RLS isolation
+  return withUserTransaction(userId, async (client) => {
+    // ... queries with RLS isolation on this client
+  })
 }
 ```
 

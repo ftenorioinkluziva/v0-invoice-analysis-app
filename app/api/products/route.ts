@@ -1,6 +1,6 @@
-import { getPool } from '@/lib/db-pool'
 import { getSessionUserId } from '@/lib/auth-session'
 import { parseHistoryPeriodDaysParam } from '@/lib/validations'
+import { withUserTransaction } from '@/lib/session-sql'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -19,14 +19,11 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const client = await getPool().connect()
+    const periodDays = periodDaysResult.data
+    const likeSearch = `%${search}%`
 
-    try {
-      const periodDays = periodDaysResult.data
-      const likeSearch = `%${search}%`
-
-      // 1 roundtrip: produtos + categorias via CTE
-      const result = await client.query(
+    // 1 roundtrip: produtos + categorias via CTE
+    const result = await withUserTransaction(userId, (client) => client.query(
         `
           WITH products_result AS (
             SELECT
@@ -66,7 +63,7 @@ export async function GET(request: Request) {
             COALESCE((SELECT json_agg(category ORDER BY category ASC) FROM categories_result), '[]') AS categories
         `,
         [userId, search, likeSearch, periodDays, category]
-      )
+      ))
 
       const row = result.rows[0]
       const rawProducts: Record<string, unknown>[] = row.products
@@ -82,9 +79,6 @@ export async function GET(request: Request) {
         })),
         categories: (row.categories as string[]),
       })
-    } finally {
-      client.release()
-    }
   } catch (error) {
     console.error('Error fetching products:', error)
     return Response.json({ error: 'Failed to fetch products' }, { status: 500 })

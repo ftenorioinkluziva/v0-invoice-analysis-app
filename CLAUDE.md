@@ -56,7 +56,7 @@ PDF upload → POST /api/extract-pdf (Gemini 2.5 Flash via AI SDK)
 
 **`lib/auth-session.ts`** — `getSessionUserId()` extracts user ID from request headers. Used in all protected API routes.
 
-**`lib/session-sql.ts`** — `setAppUserId()` sets PostgreSQL `app.user_id` per request for RLS strict mode.
+**`lib/session-sql.ts`** — `withUserTransaction()` sets PostgreSQL `app.user_id` inside the transaction that executes each tenant query.
 
 **`lib/__tests__/`** — Unit tests for `validations.ts` and `invoice-utils.ts`.
 
@@ -149,5 +149,5 @@ user_preferences     (id, user_id, alert_threshold: default 15%, notify_price_in
 - API request validation schemas live in `lib/validations.ts`
 - Price alert threshold defaults to 15% (configurable per user in `user_preferences`)
 - The app is Portuguese-language; keep all UI strings in pt-BR
-- All protected API routes call `getSessionUserId(request)` then `setAppUserId(userId)` before queries
+- Protected API routes call `getSessionUserId(request)` then use `withUserTransaction(userId, operation)` for tenant queries
 - Business logic for product normalization/categorization lives in `lib/invoice-utils.ts`, not inline in routes

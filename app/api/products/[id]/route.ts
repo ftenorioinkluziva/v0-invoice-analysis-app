@@ -1,6 +1,6 @@
-import { getPool } from '@/lib/db-pool'
 import { getSessionUserId } from '@/lib/auth-session'
 import { ProductResponseSchema, UpdateProductSchema, parseHistoryPeriodDaysParam } from '@/lib/validations'
+import { withUserTransaction } from '@/lib/session-sql'
 
 export async function GET(
   request: Request,
@@ -26,9 +26,7 @@ export async function GET(
       return Response.json({ error: 'Product not found' }, { status: 404 })
     }
 
-    const client = await getPool().connect()
-
-    try {
+    return await withUserTransaction(userId, async (client) => {
       const periodDays = periodDaysResult.data
 
       // 1 roundtrip: produto + histórico + stats + variação via CTEs
@@ -140,9 +138,7 @@ export async function GET(
           price_variation_6m: Number(stats.variation) || 0,
         },
       })
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error fetching product history:', error)
     return Response.json({ error: 'Failed to fetch product history' }, { status: 500 })
@@ -190,8 +186,7 @@ export async function PATCH(
     }
 
     values.push(productId, userId)
-    const client = await getPool().connect()
-    try {
+    return await withUserTransaction(userId, async (client) => {
       const result = await client.query(
         `UPDATE products SET ${setClauses.join(', ')} WHERE id = $${idx++} AND user_id = $${idx} RETURNING id, brand, units_per_pack`,
         values
@@ -200,9 +195,7 @@ export async function PATCH(
         return Response.json({ error: 'Product not found' }, { status: 404 })
       }
       return Response.json(ProductResponseSchema.parse(result.rows[0]))
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error updating product:', error)
     return Response.json({ error: 'Failed to update product' }, { status: 500 })

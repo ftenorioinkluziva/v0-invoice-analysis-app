@@ -1,10 +1,10 @@
-import { sql } from '@/lib/db'
-import { Pool } from 'pg'
+import { sqlForClient } from '@/lib/db'
 import { ExtractedInvoice } from '@/lib/types'
 import { SaveInvoiceSchema } from '@/lib/validations'
 import { normalizeProductName, categorizeProduct, validateItemPrices, extractUnit, buildComparablePricing } from '@/lib/invoice-utils'
 import { getSessionUserId } from '@/lib/auth-session'
-import { setAppUserId } from '@/lib/session-sql'
+import { setAppUserId, withUserTransaction } from '@/lib/session-sql'
+import { getPool } from '@/lib/db-pool'
 
 export async function GET(request: Request) {
   try {
@@ -13,7 +13,9 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const invoices = await sql`
+    const invoices = await withUserTransaction(userId, async (client) => {
+      const sql = sqlForClient(client)
+      return sql`
       SELECT 
         i.id,
         i.invoice_number,
@@ -30,6 +32,7 @@ export async function GET(request: Request) {
       ORDER BY i.purchase_date DESC
       LIMIT 50
     `
+    })
     return Response.json({ invoices })
   } catch (error) {
     console.error('Error fetching invoices:', error)
@@ -51,13 +54,11 @@ export async function POST(request: Request) {
     const { data, filename } = parsed.data
 
 
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
-    const client = await pool.connect()
+    const client = await getPool().connect()
     // Seta app.user_id para isolamento RLS estrito
-    await setAppUserId(client, userId)
-
     try {
       await client.query('BEGIN')
+      await setAppUserId(client, userId)
 
       // Upsert store — match by CNPJ when available, fallback to name
       let storeId: number
@@ -66,7 +67,8 @@ export async function POST(request: Request) {
         const result = await client.query(`
           INSERT INTO stores (name, cnpj, address, user_id)
           VALUES ($1, $2, $3, $4)
-          ON CONFLICT (cnpj) DO UPDATE SET name = EXCLUDED.name
+          ON CONFLICT (user_id, cnpj) WHERE cnpj IS NOT NULL
+          DO UPDATE SET name = EXCLUDED.name
           RETURNING id
         `, [data.store_name, data.store_cnpj, data.store_address, userId])
         storeId = result.rows[0].id
@@ -191,6 +193,8 @@ export async function POST(request: Request) {
 
 
 async function generatePriceAlerts(items: ExtractedInvoice['items'], userId: string) {
+  await withUserTransaction(userId, async (client) => {
+  const sql = sqlForClient(client)
   // Obter configurações de notificação dinamicamente
   const prefsConf = await sql`SELECT alert_threshold, notify_price_increase FROM user_preferences WHERE user_id = ${userId} LIMIT 1`
   const threshold = prefsConf.length > 0 ? Number(prefsConf[0].alert_threshold) : 15
@@ -237,4 +241,5 @@ async function generatePriceAlerts(items: ExtractedInvoice['items'], userId: str
       }
     }
   }
+  })
 }

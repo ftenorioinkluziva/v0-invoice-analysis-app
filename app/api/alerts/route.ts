@@ -1,6 +1,6 @@
-import { sql } from '@/lib/db'
 import { UpdateAlertSchema } from '@/lib/validations'
 import { getSessionUserId } from '@/lib/auth-session'
+import { withUserTransaction } from '@/lib/session-sql'
 
 export async function GET(request: Request) {
   try {
@@ -9,7 +9,8 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const alerts = await sql`
+    const alerts = await withUserTransaction(userId, async (client) => {
+      const result = await client.query(`
       SELECT 
         a.id,
         a.alert_type,
@@ -21,10 +22,12 @@ export async function GET(request: Request) {
         p.category
       FROM alerts a
       JOIN products p ON a.product_id = p.id
-      WHERE a.user_id = ${userId} AND p.user_id = ${userId}
+      WHERE a.user_id = $1 AND p.user_id = $1
       ORDER BY a.created_at DESC
       LIMIT 50
-    `
+    `, [userId])
+      return result.rows
+    })
     return Response.json({ alerts })
   } catch (error) {
     console.error('Error fetching alerts:', error)
@@ -45,9 +48,12 @@ export async function PATCH(request: Request) {
     }
     const { id, read } = parsed.data
 
-    await sql`
-      UPDATE alerts SET read = ${read} WHERE id = ${id} AND user_id = ${userId}
-    `
+    await withUserTransaction(userId, async (client) => {
+      await client.query(
+        'UPDATE alerts SET read = $1 WHERE id = $2 AND user_id = $3',
+        [read, id, userId]
+      )
+    })
     
     return Response.json({ success: true })
   } catch (error) {

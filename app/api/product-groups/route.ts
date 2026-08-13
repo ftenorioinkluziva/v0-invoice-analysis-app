@@ -1,6 +1,6 @@
-import { getPool } from '@/lib/db-pool'
 import { getSessionUserId } from '@/lib/auth-session'
 import { isMissingRelationError } from '@/lib/db-errors'
+import { withUserTransaction } from '@/lib/session-sql'
 import {
   CreateProductGroupSchema,
   ProductGroupResponseSchema,
@@ -31,9 +31,7 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const client = await getPool().connect()
-
-    try {
+    return await withUserTransaction(userId, async (client) => {
       const groupsResult = view === 'comparable'
         ? await client.query(
             `
@@ -106,9 +104,7 @@ export async function GET(request: Request) {
           max_unit_price: Number(group.max_unit_price) || 0,
         })),
       })
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     if (isMissingRelationError(error, 'product_groups')) {
       return Response.json({ groups: [] })
@@ -136,24 +132,23 @@ export async function POST(request: Request) {
       return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
     }
 
-    const client = await getPool().connect()
-    try {
-      const result = await client.query(
+    return await withUserTransaction(userId, async (client) => {
+      try {
+        const result = await client.query(
         `INSERT INTO product_groups (display_name, base_unit, user_id)
          VALUES ($1, $2, $3)
          RETURNING id, display_name, base_unit`,
         [parsed.data.display_name, parsed.data.base_unit, userId]
-      )
-      const response = ProductGroupResponseSchema.parse(result.rows[0])
-      return Response.json(response, { status: 201 })
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        return Response.json({ error: 'Product group already exists' }, { status: 409 })
+        )
+        const response = ProductGroupResponseSchema.parse(result.rows[0])
+        return Response.json(response, { status: 201 })
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          return Response.json({ error: 'Product group already exists' }, { status: 409 })
+        }
+        throw error
       }
-      throw error
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error creating product group:', error)
     return Response.json({ error: 'Failed to create product group' }, { status: 500 })

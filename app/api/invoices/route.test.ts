@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getSessionUserId = vi.fn()
 const setAppUserId = vi.fn()
+const withUserTransaction = vi.fn(async (_userId: string, operation: (client: unknown) => unknown) =>
+  operation(await connect())
+)
 const sql = vi.fn()
 const connect = vi.fn()
 
@@ -11,10 +14,12 @@ vi.mock('@/lib/auth-session', () => ({
 
 vi.mock('@/lib/session-sql', () => ({
   setAppUserId,
+  withUserTransaction,
 }))
 
 vi.mock('@/lib/db', () => ({
   sql,
+  sqlForClient: () => sql,
 }))
 
 vi.mock('pg', () => ({

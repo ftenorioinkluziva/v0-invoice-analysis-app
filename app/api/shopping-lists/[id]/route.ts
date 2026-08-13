@@ -1,6 +1,6 @@
-import { getPool } from '@/lib/db-pool'
 import { AddListItemSchema, UpdateListItemSchema, DeleteListItemSchema } from '@/lib/validations'
 import { getSessionUserId } from '@/lib/auth-session'
+import { withUserTransaction } from '@/lib/session-sql'
 import { getComparableReferenceLabel, toNullableNumber } from '@/lib/shopping-list'
 import type { ComparableBaseUnit } from '@/lib/types'
 
@@ -17,9 +17,7 @@ export async function GET(
     const { id } = await params
     const listId = parseInt(id)
 
-    const client = await getPool().connect()
-
-    try {
+    return await withUserTransaction(userId, async (client) => {
       // 1 roundtrip: tudo resolvido via CTEs numa única query
       const result = await client.query(
         `
@@ -144,9 +142,7 @@ export async function GET(
           days_since_purchase: Number(s.days_since_purchase) || 0,
         })),
       })
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error fetching shopping list:', error)
     return Response.json({ error: 'Failed to fetch shopping list' }, { status: 500 })
@@ -172,8 +168,7 @@ export async function POST(
     const { product_id, quantity } = parsed.data
 
     // 1 roundtrip: verifica ownership + busca preço + upsert via CTE
-    const client = await getPool().connect()
-    try {
+    return await withUserTransaction(userId, async (client) => {
       const result = await client.query(
         `
           WITH ownership AS (
@@ -209,9 +204,7 @@ export async function POST(
       }
 
       return Response.json({ success: true, itemId: row.item_id, updated: row.updated })
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error adding item to list:', error)
     return Response.json({ error: 'Failed to add item' }, { status: 500 })
@@ -238,8 +231,7 @@ export async function PATCH(
     }
     const { item_id, checked, quantity, status } = parsed.data
 
-    const client = await getPool().connect()
-    try {
+    return await withUserTransaction(userId, async (client) => {
       let found = false
 
       if (status) {
@@ -295,9 +287,7 @@ export async function PATCH(
       }
 
       return Response.json({ success: true })
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error updating shopping list:', error)
     return Response.json({ error: 'Failed to update' }, { status: 500 })
@@ -323,8 +313,7 @@ export async function DELETE(
     }
     const { item_id } = parsed.data
 
-    const client = await getPool().connect()
-    try {
+    return await withUserTransaction(userId, async (client) => {
       let found = false
 
       if (item_id) {
@@ -353,9 +342,7 @@ export async function DELETE(
       }
 
       return Response.json({ success: true })
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error deleting:', error)
     return Response.json({ error: 'Failed to delete' }, { status: 500 })

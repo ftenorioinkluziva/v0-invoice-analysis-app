@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server'
-import { sql } from '@/lib/db'
-import { Pool } from 'pg'
 import { getSessionUserId } from '@/lib/auth-session'
-import { setAppUserId } from '@/lib/session-sql'
+import { withUserTransaction } from '@/lib/session-sql'
 
 export async function GET(request: Request) {
   try {
@@ -11,28 +9,25 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const rows = await sql`SELECT * FROM user_preferences WHERE user_id = ${userId} LIMIT 1`
-    
-    if (rows.length === 0) {
-      const created = await sql`
+    const preference = await withUserTransaction(userId, async (client) => {
+      const rows = await client.query(
+        'SELECT * FROM user_preferences WHERE user_id = $1 LIMIT 1',
+        [userId]
+      )
+      if (rows.rows.length > 0) return rows.rows[0]
+
+      const created = await client.query(`
         INSERT INTO user_preferences (
-          alert_threshold,
-          notify_price_increase,
-          notify_opportunities,
-          notify_restock_reminders,
-          notify_weekly_summary,
-          user_id
-        )
-        VALUES (15, true, true, true, false, ${userId})
+          alert_threshold, notify_price_increase, notify_opportunities,
+          notify_restock_reminders, notify_weekly_summary, user_id
+        ) VALUES (15, true, true, true, false, $1)
         RETURNING *
-      `
+      `, [userId])
 
-      return NextResponse.json({
-        ...created[0],
-      })
-    }
+      return created.rows[0]
+    })
 
-    return NextResponse.json(rows[0])
+    return NextResponse.json(preference)
   } catch (error) {
     console.error('Failed to fetch user preferences:', error)
     return NextResponse.json(
@@ -51,8 +46,8 @@ export async function PATCH(request: Request) {
 
     const data = await request.json()
     
-    const updates = []
-    const values = []
+    const updates: string[] = []
+    const values: unknown[] = []
     let i = 1
     
     const validFields = [
@@ -84,13 +79,10 @@ export async function PATCH(request: Request) {
       RETURNING *
     `
     values.push(userId)
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-    const client = await pool.connect()
-    await setAppUserId(client, userId)
-    const { rows } = await client.query(query, values)
-    client.release()
-    
-    if (rows.length === 0) {
+    const preference = await withUserTransaction(userId, async (client) => {
+      const { rows } = await client.query(query, values)
+      if (rows.length > 0) return rows[0]
+
       const insertedFields = ['user_id', ...validFields.filter((key) => data[key] !== undefined)]
       const insertedValues = [userId, ...validFields.filter((key) => data[key] !== undefined).map((key) => data[key])]
       const placeholders = insertedValues.map((_, index) => `$${index + 1}`).join(', ')
@@ -100,16 +92,11 @@ export async function PATCH(request: Request) {
         RETURNING *
       `
 
-      const poolInsert = new Pool({ connectionString: process.env.DATABASE_URL })
-      const clientInsert = await poolInsert.connect()
-      await setAppUserId(clientInsert, userId)
-      const insertResult = await clientInsert.query(insertQuery, insertedValues)
-      clientInsert.release()
+      const insertResult = await client.query(insertQuery, insertedValues)
+      return insertResult.rows[0]
+    })
 
-      return NextResponse.json(insertResult.rows[0])
-    }
-
-    return NextResponse.json(rows[0])
+    return NextResponse.json(preference)
   } catch (error) {
     console.error('Failed to update user preferences:', error)
     return NextResponse.json(
