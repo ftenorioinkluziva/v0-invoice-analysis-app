@@ -24,7 +24,7 @@
 - **Backend:** Next.js API Routes
 - **Database:** Neon Postgres (raw SQL, sem ORM)
 - **Auth:** Better-auth v1 (email/password + Google OAuth)
-- **AI:** Google Gemini 2.5 Flash via AI SDK v6
+- **AI:** OpenRouter com `google/gemini-2.5-flash` via AI SDK 7
 - **Testing:** Vitest (unit) + Playwright (E2E)
 
 ### Funcionalidades Implementadas
