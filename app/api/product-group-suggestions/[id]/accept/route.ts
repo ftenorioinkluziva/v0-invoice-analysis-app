@@ -2,6 +2,12 @@ import { Pool } from 'pg'
 import { getSessionUserId } from '@/lib/auth-session'
 import { setAppUserId } from '@/lib/session-sql'
 import { acceptProductGroupSuggestion } from '@/lib/product-group-suggestions'
+import {
+  notFoundError,
+  operationErrorResponse,
+  toOperationError,
+  unauthorizedError,
+} from '@/lib/operation-error'
 
 export async function POST(
   request: Request,
@@ -10,13 +16,13 @@ export async function POST(
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const { id } = await params
     const suggestionId = Number(id)
     if (!Number.isInteger(suggestionId) || suggestionId <= 0) {
-      return Response.json({ error: 'Suggestion not found' }, { status: 404 })
+      return operationErrorResponse(notFoundError('SUGGESTION_NOT_FOUND', 'Suggestion not found'))
     }
 
     const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
@@ -29,12 +35,17 @@ export async function POST(
       const result = await acceptProductGroupSuggestion(client, suggestionId, userId)
       if (result.kind === 'not_found') {
         await client.query('ROLLBACK')
-        return Response.json({ error: 'Suggestion not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('SUGGESTION_NOT_FOUND', 'Suggestion not found'))
       }
 
       if (result.kind === 'invalid') {
         await client.query('ROLLBACK')
-        return Response.json({ error: result.message }, { status: 400 })
+        return operationErrorResponse({
+          code: 'SUGGESTION_STATE_CONFLICT',
+          category: 'conflict',
+          message: result.message,
+          retryable: false,
+        })
       }
 
       await client.query('COMMIT')
@@ -47,6 +58,9 @@ export async function POST(
     }
   } catch (error) {
     console.error('Error accepting product group suggestion:', error)
-    return Response.json({ error: 'Failed to accept product group suggestion' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'SUGGESTION_ACCEPT_FAILED',
+      message: 'Failed to accept product group suggestion',
+    }))
   }
 }

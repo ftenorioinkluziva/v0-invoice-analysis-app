@@ -173,8 +173,13 @@ describe('/api/product-group-suggestions/[id]/accept and /reject', () => {
       { params: Promise.resolve({ id: '14' }) }
     )
 
-    expect(response.status).toBe(400)
-    await expect(response.json()).resolves.toEqual({ error: 'Suggestion is obsolete' })
+    expect(response.status).toBe(409)
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Suggestion is obsolete',
+      code: 'SUGGESTION_STATE_CONFLICT',
+      category: 'conflict',
+      retryable: false,
+    })
   })
 
   it('returns 404 when the suggestion does not belong to the active user', async () => {

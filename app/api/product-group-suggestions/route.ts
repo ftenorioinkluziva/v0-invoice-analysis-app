@@ -6,12 +6,13 @@ import {
   listPendingProductGroupSuggestions,
   recomputeProductGroupSuggestions,
 } from '@/lib/product-group-suggestions'
+import { operationErrorResponse, toOperationError, unauthorizedError } from '@/lib/operation-error'
 
 export async function GET(request: Request) {
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const client = await getPool().connect()
@@ -37,6 +38,9 @@ export async function GET(request: Request) {
     }
 
     console.error('Error listing product group suggestions:', error)
-    return Response.json({ error: 'Failed to list product group suggestions' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'PRODUCT_GROUP_SUGGESTIONS_LIST_FAILED',
+      message: 'Failed to list product group suggestions',
+    }))
   }
 }
