@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getSessionUserId = vi.fn()
-const setAppUserId = vi.fn()
+const withUserTransaction = vi.fn(async (_userId: string, operation: (client: unknown) => unknown) =>
+  operation(await connect())
+)
 const connect = vi.fn()
 
 vi.mock('@/lib/auth-session', () => ({
@@ -9,7 +11,7 @@ vi.mock('@/lib/auth-session', () => ({
 }))
 
 vi.mock('@/lib/session-sql', () => ({
-  setAppUserId,
+  withUserTransaction,
 }))
 
 vi.mock('pg', () => ({
@@ -25,7 +27,6 @@ describe('GET /api/product-groups/[id]/history', () => {
     vi.resetModules()
     vi.clearAllMocks()
     getSessionUserId.mockResolvedValue('user-1')
-    setAppUserId.mockResolvedValue(undefined)
   })
 
   it('returns 400 for invalid period_days', async () => {
@@ -88,6 +89,7 @@ describe('GET /api/product-groups/[id]/history', () => {
     )
 
     expect(response.status).toBe(200)
+    expect(withUserTransaction).toHaveBeenCalledWith('user-1', expect.any(Function))
     await expect(response.json()).resolves.toEqual({
       id: 3,
       display_name: 'Leites',
@@ -133,7 +135,12 @@ describe('GET /api/product-groups/[id]/history', () => {
     )
 
     expect(response.status).toBe(404)
-    await expect(response.json()).resolves.toEqual({ error: 'Product group not found' })
+    await expect(response.json()).resolves.toMatchObject({
+      error: 'Product group not found',
+      code: 'PRODUCT_GROUP_NOT_FOUND',
+      category: 'not_found',
+      retryable: false,
+    })
   })
 })
 

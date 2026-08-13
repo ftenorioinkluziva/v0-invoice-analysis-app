@@ -1,8 +1,14 @@
-import { Pool } from 'pg'
 import { getSessionUserId } from '@/lib/auth-session'
 import { isMissingRelationError } from '@/lib/db-errors'
-import { setAppUserId } from '@/lib/session-sql'
+import { withUserTransaction } from '@/lib/session-sql'
 import { parseHistoryPeriodDaysParam } from '@/lib/validations'
+import {
+  notFoundError,
+  operationErrorResponse,
+  toOperationError,
+  unauthorizedError,
+  validationError,
+} from '@/lib/operation-error'
 
 export async function GET(
   request: Request,
@@ -12,29 +18,23 @@ export async function GET(
   const periodDaysResult = parseHistoryPeriodDaysParam(searchParams.get('period_days'))
 
   if (!periodDaysResult.success) {
-    return Response.json({ error: 'Invalid period_days' }, { status: 400 })
+    return operationErrorResponse(validationError('INVALID_PERIOD_DAYS', 'Invalid period_days'))
   }
 
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const { id } = await params
     const groupId = Number(id)
 
     if (!Number.isInteger(groupId) || groupId <= 0) {
-      return Response.json({ error: 'Product group not found' }, { status: 404 })
+      return operationErrorResponse(notFoundError('PRODUCT_GROUP_NOT_FOUND', 'Product group not found'))
     }
 
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
-    const client = await pool.connect()
-
-    try {
-      await client.query('BEGIN')
-      await setAppUserId(client, userId)
-
+    return await withUserTransaction(userId, async client => {
       const periodDays = periodDaysResult.data
       const groupResult = await client.query(
         `
@@ -47,8 +47,7 @@ export async function GET(
       )
 
       if (groupResult.rows.length === 0) {
-        await client.query('ROLLBACK')
-        return Response.json({ error: 'Product group not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('PRODUCT_GROUP_NOT_FOUND', 'Product group not found'))
       }
 
       const membersResult = await client.query(
@@ -106,8 +105,6 @@ export async function GET(
         [groupId, userId, periodDays]
       )
 
-      await client.query('COMMIT')
-
       return Response.json({
         id: Number(groupResult.rows[0].id),
         display_name: String(groupResult.rows[0].display_name),
@@ -130,18 +127,16 @@ export async function GET(
           product_label: String(item.product_label),
         })),
       })
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     if (isMissingRelationError(error, 'product_groups')) {
-      return Response.json({ error: 'Product group not found' }, { status: 404 })
+      return operationErrorResponse(notFoundError('PRODUCT_GROUP_NOT_FOUND', 'Product group not found'))
     }
 
     console.error('Error fetching comparable product group history:', error)
-    return Response.json({ error: 'Failed to fetch product group history' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'PRODUCT_GROUP_HISTORY_FAILED',
+      message: 'Failed to fetch product group history',
+    }))
   }
 }

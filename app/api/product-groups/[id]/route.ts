@@ -1,6 +1,5 @@
-import { Pool } from 'pg'
 import { getSessionUserId } from '@/lib/auth-session'
-import { setAppUserId } from '@/lib/session-sql'
+import { withUserTransaction } from '@/lib/session-sql'
 import {
   ProductGroupResponseSchema,
   UpdateProductGroupSchema,
@@ -45,13 +44,7 @@ export async function PATCH(
       )
     }
 
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
-    const client = await pool.connect()
-
-    try {
-      await client.query('BEGIN')
-      await setAppUserId(client, userId)
-
+    return await withUserTransaction(userId, async client => {
       const result = await client.query(
         `
           UPDATE product_groups
@@ -63,31 +56,22 @@ export async function PATCH(
       )
 
       if (result.rows.length === 0) {
-        await client.query('ROLLBACK')
         return operationErrorResponse(notFoundError('PRODUCT_GROUP_NOT_FOUND', 'Product group not found'))
       }
 
-      await client.query('COMMIT')
-
       const response = ProductGroupResponseSchema.parse(result.rows[0])
       return Response.json(response)
-    } catch (error) {
-      await client.query('ROLLBACK')
-
-      if (isUniqueViolation(error)) {
-        return operationErrorResponse({
-          code: 'PRODUCT_GROUP_ALREADY_EXISTS',
-          category: 'conflict',
-          message: 'Product group already exists',
-          retryable: false,
-        })
-      }
-
-      throw error
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
+    if (isUniqueViolation(error)) {
+      return operationErrorResponse({
+        code: 'PRODUCT_GROUP_ALREADY_EXISTS',
+        category: 'conflict',
+        message: 'Product group already exists',
+        retryable: false,
+      })
+    }
+
     console.error('Error updating product group:', error)
     return operationErrorResponse(toOperationError(error, {
       code: 'PRODUCT_GROUP_UPDATE_FAILED',
