@@ -1,6 +1,8 @@
 import { UpdateAlertSchema } from '@/lib/validations'
 import { getSessionUserId } from '@/lib/auth-session'
 import { withUserTransaction } from '@/lib/session-sql'
+import { createPgAlertRepository } from '@/lib/alert-repository'
+import { listAlerts, markAlertRead } from '@/lib/alerts'
 
 export async function GET(request: Request) {
   try {
@@ -9,25 +11,9 @@ export async function GET(request: Request) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const alerts = await withUserTransaction(userId, async (client) => {
-      const result = await client.query(`
-      SELECT 
-        a.id,
-        a.alert_type,
-        a.message,
-        a.data,
-        a.read,
-        a.created_at,
-        p.normalized_name as product_name,
-        p.category
-      FROM alerts a
-      JOIN products p ON a.product_id = p.id
-      WHERE a.user_id = $1 AND p.user_id = $1
-      ORDER BY a.created_at DESC
-      LIMIT 50
-    `, [userId])
-      return result.rows
-    })
+    const alerts = await withUserTransaction(userId, async (client) =>
+      listAlerts(createPgAlertRepository(client, userId))
+    )
     return Response.json({ alerts })
   } catch (error) {
     console.error('Error fetching alerts:', error)
@@ -48,12 +34,9 @@ export async function PATCH(request: Request) {
     }
     const { id, read } = parsed.data
 
-    await withUserTransaction(userId, async (client) => {
-      await client.query(
-        'UPDATE alerts SET read = $1 WHERE id = $2 AND user_id = $3',
-        [read, id, userId]
-      )
-    })
+    await withUserTransaction(userId, async (client) =>
+      markAlertRead(createPgAlertRepository(client, userId), { id, read })
+    )
     
     return Response.json({ success: true })
   } catch (error) {
