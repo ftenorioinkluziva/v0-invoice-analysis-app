@@ -1,6 +1,7 @@
 export type OperationErrorCategory =
   | 'validation'
   | 'authorization'
+  | 'not_found'
   | 'conflict'
   | 'rate_limit'
   | 'upstream'
@@ -23,6 +24,7 @@ export type OperationErrorResponseOptions = {
 const defaultStatusByCategory: Record<OperationErrorCategory, number> = {
   validation: 400,
   authorization: 401,
+  not_found: 404,
   conflict: 409,
   rate_limit: 429,
   upstream: 502,
@@ -82,6 +84,34 @@ export function validationError(
     message,
     retryable: false,
     ...(invalidFields ? { invalidFields } : {}),
+  }
+}
+
+export function notFoundError(code: string, message: string): OperationError {
+  return {
+    code,
+    category: 'not_found',
+    message,
+    retryable: false,
+  }
+}
+
+export class InvalidJsonBodyError extends Error {
+  readonly code = 'INVALID_JSON_BODY'
+  readonly category = 'validation' as const
+  readonly retryable = false
+
+  constructor() {
+    super('Invalid JSON request body')
+    this.name = 'InvalidJsonBodyError'
+  }
+}
+
+export async function readJsonBody(request: Request): Promise<unknown> {
+  try {
+    return await request.json()
+  } catch {
+    throw new InvalidJsonBodyError()
   }
 }
 

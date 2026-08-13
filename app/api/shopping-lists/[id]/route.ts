@@ -3,6 +3,14 @@ import { getSessionUserId } from '@/lib/auth-session'
 import { withUserTransaction } from '@/lib/session-sql'
 import { getComparableReferenceLabel, toNullableNumber } from '@/lib/shopping-list'
 import type { ComparableBaseUnit } from '@/lib/types'
+import {
+  notFoundError,
+  operationErrorResponse,
+  readJsonBody,
+  toOperationError,
+  unauthorizedError,
+  validationError,
+} from '@/lib/operation-error'
 
 export async function GET(
   request: Request,
@@ -11,7 +19,7 @@ export async function GET(
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const { id } = await params
@@ -110,7 +118,7 @@ export async function GET(
       const row = result.rows[0]
 
       if (!row.list) {
-        return Response.json({ error: 'List not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('SHOPPING_LIST_NOT_FOUND', 'List not found'))
       }
 
       const rawItems: Record<string, unknown>[] = row.items
@@ -145,7 +153,10 @@ export async function GET(
     })
   } catch (error) {
     console.error('Error fetching shopping list:', error)
-    return Response.json({ error: 'Failed to fetch shopping list' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'SHOPPING_LIST_FETCH_FAILED',
+      message: 'Failed to fetch shopping list',
+    }))
   }
 }
 
@@ -156,14 +167,21 @@ export async function POST(
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const { id } = await params
     const listId = parseInt(id)
-    const parsed = AddListItemSchema.safeParse(await request.json())
+    const parsed = AddListItemSchema.safeParse(await readJsonBody(request))
     if (!parsed.success) {
-      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+      return operationErrorResponse(
+        validationError(
+          'INVALID_SHOPPING_LIST_ITEM_REQUEST',
+          'Invalid request',
+          parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: { details: parsed.error.flatten() } }
+      )
     }
     const { product_id, quantity } = parsed.data
 
@@ -200,14 +218,17 @@ export async function POST(
 
       const row = result.rows[0]
       if (!row.list_exists) {
-        return Response.json({ error: 'List not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('SHOPPING_LIST_NOT_FOUND', 'List not found'))
       }
 
       return Response.json({ success: true, itemId: row.item_id, updated: row.updated })
     })
   } catch (error) {
     console.error('Error adding item to list:', error)
-    return Response.json({ error: 'Failed to add item' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'SHOPPING_LIST_ITEM_ADD_FAILED',
+      message: 'Failed to add item',
+    }))
   }
 }
 
@@ -218,16 +239,23 @@ export async function PATCH(
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     // Lê body e params em paralelo antes de qualquer query
-    const [{ id }, body] = await Promise.all([params, request.json()])
+    const [{ id }, body] = await Promise.all([params, readJsonBody(request)])
     const listId = parseInt(id)
 
     const parsed = UpdateListItemSchema.safeParse(body)
     if (!parsed.success) {
-      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+      return operationErrorResponse(
+        validationError(
+          'INVALID_SHOPPING_LIST_UPDATE_REQUEST',
+          'Invalid request',
+          parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: { details: parsed.error.flatten() } }
+      )
     }
     const { item_id, checked, quantity, status } = parsed.data
 
@@ -283,14 +311,17 @@ export async function PATCH(
       }
 
       if (!found) {
-        return Response.json({ error: 'List not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('SHOPPING_LIST_NOT_FOUND', 'List not found'))
       }
 
       return Response.json({ success: true })
     })
   } catch (error) {
     console.error('Error updating shopping list:', error)
-    return Response.json({ error: 'Failed to update' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'SHOPPING_LIST_UPDATE_FAILED',
+      message: 'Failed to update',
+    }))
   }
 }
 
@@ -301,15 +332,22 @@ export async function DELETE(
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
-    const [{ id }, body] = await Promise.all([params, request.json()])
+    const [{ id }, body] = await Promise.all([params, readJsonBody(request)])
     const listId = parseInt(id)
 
     const parsed = DeleteListItemSchema.safeParse(body)
     if (!parsed.success) {
-      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+      return operationErrorResponse(
+        validationError(
+          'INVALID_SHOPPING_LIST_DELETE_REQUEST',
+          'Invalid request',
+          parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: { details: parsed.error.flatten() } }
+      )
     }
     const { item_id } = parsed.data
 
@@ -338,13 +376,16 @@ export async function DELETE(
       }
 
       if (!found) {
-        return Response.json({ error: 'List not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('SHOPPING_LIST_NOT_FOUND', 'List not found'))
       }
 
       return Response.json({ success: true })
     })
   } catch (error) {
     console.error('Error deleting:', error)
-    return Response.json({ error: 'Failed to delete' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'SHOPPING_LIST_DELETE_FAILED',
+      message: 'Failed to delete',
+    }))
   }
 }

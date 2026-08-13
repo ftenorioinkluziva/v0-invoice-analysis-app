@@ -1,12 +1,13 @@
 import { CreateShoppingListSchema } from '@/lib/validations'
 import { getSessionUserId } from '@/lib/auth-session'
 import { withUserTransaction } from '@/lib/session-sql'
+import { operationErrorResponse, readJsonBody, toOperationError, unauthorizedError, validationError } from '@/lib/operation-error'
 
 export async function GET(request: Request) {
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     return await withUserTransaction(userId, async (client) => {
@@ -32,7 +33,10 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error('Error fetching shopping lists:', error)
-    return Response.json({ error: 'Failed to fetch shopping lists' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'SHOPPING_LISTS_FETCH_FAILED',
+      message: 'Failed to fetch shopping lists',
+    }))
   }
 }
 
@@ -40,12 +44,19 @@ export async function POST(request: Request) {
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
-    const parsed = CreateShoppingListSchema.safeParse(await request.json())
+    const parsed = CreateShoppingListSchema.safeParse(await readJsonBody(request))
     if (!parsed.success) {
-      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+      return operationErrorResponse(
+        validationError(
+          'INVALID_SHOPPING_LIST_REQUEST',
+          'Invalid request',
+          parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: { details: parsed.error.flatten() } }
+      )
     }
     const { name } = parsed.data
 
@@ -60,6 +71,9 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('Error creating shopping list:', error)
-    return Response.json({ error: 'Failed to create shopping list' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'SHOPPING_LIST_CREATE_FAILED',
+      message: 'Failed to create shopping list',
+    }))
   }
 }
