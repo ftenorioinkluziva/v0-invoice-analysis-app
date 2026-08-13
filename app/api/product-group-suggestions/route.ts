@@ -1,7 +1,6 @@
-import { getPool } from '@/lib/db-pool'
 import { getSessionUserId } from '@/lib/auth-session'
 import { isMissingRelationError } from '@/lib/db-errors'
-import { setAppUserId } from '@/lib/session-sql'
+import { withUserTransaction } from '@/lib/session-sql'
 import {
   listPendingProductGroupSuggestions,
   recomputeProductGroupSuggestions,
@@ -15,23 +14,12 @@ export async function GET(request: Request) {
       return operationErrorResponse(unauthorizedError())
     }
 
-    const client = await getPool().connect()
-
-    try {
-      await client.query('BEGIN')
-      await setAppUserId(client, userId)
-
+    return await withUserTransaction(userId, async client => {
       await recomputeProductGroupSuggestions(client, userId)
       const suggestions = await listPendingProductGroupSuggestions(client, userId)
 
-      await client.query('COMMIT')
       return Response.json(suggestions)
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     if (isMissingRelationError(error, 'product_groups')) {
       return Response.json([])
