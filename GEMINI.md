@@ -17,7 +17,7 @@ The project was initially bootstrapped using [v0.dev](https://v0.app) and seems 
 *   **Authentication:** `better-auth` for email/password and Google social login.
 *   **Database:** PostgreSQL via the `pg` package.
 *   **PDF Processing:** `pdf-parse` on the server-side.
-*   **AI/LLM:** The `@ai-sdk/google` package is included, suggesting that Google's AI (Gemini) is used for data extraction or analysis from the invoices.
+*   **AI/LLM:** OpenRouter is the provider adapter, using `google/gemini-2.5-flash` through AI SDK 7 for invoice extraction.
 *   **Testing:**
     *   Unit/Integration: Vitest
     *   End-to-End: Playwright

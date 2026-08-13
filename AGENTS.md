@@ -33,7 +33,7 @@ Run in order before marking tasks complete:
 
 ```bash
 DATABASE_URL="postgresql://..."              # Neon Postgres (required)
-GOOGLE_GENERATIVE_AI_API_KEY="..."          # AI extraction (Gemini 2.5 Flash)
+OPENROUTER_API_KEY="..."                    # OpenRouter provider (google/gemini-2.5-flash)
 BETTER_AUTH_SECRET="..."                    # Auth sessions
 GOOGLE_CLIENT_ID="..."                      # OAuth (optional)
 GOOGLE_CLIENT_SECRET="..."                  # OAuth (optional)
@@ -42,7 +42,7 @@ GOOGLE_CLIENT_SECRET="..."                  # OAuth (optional)
 ## Key Architecture Facts
 
 - **No ORM** — Raw SQL via `pg` pools and parameterized queries
-- **AI Extraction** — Uses `ai` SDK with `Output.object(ExtractedInvoiceSchema)` for structured extraction
+- **AI Extraction** — Uses AI SDK 7 through the OpenRouter adapter with `Output.object(ExtractedInvoiceSchema)` and model `google/gemini-2.5-flash`
 - **Auth** — Better-auth v1 with email/password + Google OAuth
 - **RLS** — Strict `app.user_id` isolation; protected routes use `withUserTransaction(userId, operation)` so context and queries share one transaction
 - **Language** — Portuguese (pt-BR); all UI strings should be in Portuguese

@@ -14,8 +14,8 @@ vi.mock('ai', () => ({
   },
 }))
 
-vi.mock('@ai-sdk/google', () => ({
-  google: vi.fn((model: string) => model),
+vi.mock('@openrouter/ai-sdk-provider', () => ({
+  createOpenRouter: vi.fn(() => vi.fn((model: string) => model)),
 }))
 
 const createUploadRequest = (file: File) => {

@@ -1,10 +1,13 @@
-import { generateText, Output } from 'ai'
-import { google } from '@ai-sdk/google'
-import { ExtractedInvoiceSchema } from '@/lib/types'
 import { getSessionUserId } from '@/lib/auth-session'
+import {
+  extractInvoice,
+  INVOICE_EXTRACTION_FILE_TYPES,
+  type InvoiceExtractionError,
+} from '@/lib/invoice-extraction'
+import { createInvoiceExtractor } from '@/lib/ai/invoice-extractor'
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
-export const SUPPORTED_FILE_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const
+export const SUPPORTED_FILE_TYPES = INVOICE_EXTRACTION_FILE_TYPES
 
 type UploadValidationResult =
   | { valid: true }
@@ -55,83 +58,6 @@ export const validateUploadFile = (file: File | null): UploadValidationResult =>
   return { valid: true }
 }
 
-type ExtractPdfError = {
-  statusCode: number
-  code: string
-  message: string
-  logMessage: string
-}
-
-const getExtractPdfError = (error: unknown): ExtractPdfError => {
-  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    return {
-      statusCode: 500,
-      code: 'AI_CONFIG_MISSING',
-      message:
-        'A extração está temporariamente indisponível por configuração do serviço de IA. Tente novamente mais tarde.',
-      logMessage: 'GOOGLE_GENERATIVE_AI_API_KEY is not configured',
-    }
-  }
-
-  if (!(error instanceof Error)) {
-    return {
-      statusCode: 500,
-      code: 'EXTRACT_UNKNOWN_ERROR',
-      message: 'Não foi possível processar o arquivo agora. Tente novamente em instantes.',
-      logMessage: 'Unknown non-Error thrown',
-    }
-  }
-
-  const candidate = error as Error & {
-    statusCode?: number
-    responseBody?: string
-  }
-
-  const statusCode = candidate.statusCode
-  const responseBody = candidate.responseBody ?? ''
-  const lowerMessage = error.message.toLowerCase()
-  const lowerResponseBody = responseBody.toLowerCase()
-
-  if (
-    statusCode === 403 &&
-    (lowerMessage.includes('reported as leaked') || lowerResponseBody.includes('reported as leaked'))
-  ) {
-    return {
-      statusCode: 503,
-      code: 'AI_KEY_REVOKED',
-      message:
-        'A extração está temporariamente indisponível por manutenção da integração de IA. Tente novamente em alguns minutos.',
-      logMessage: 'AI provider key rejected as leaked/revoked',
-    }
-  }
-
-  if (statusCode === 401 || statusCode === 403) {
-    return {
-      statusCode: 503,
-      code: 'AI_AUTH_ERROR',
-      message:
-        'A extração está temporariamente indisponível por autenticação do serviço de IA. Tente novamente mais tarde.',
-      logMessage: `AI provider auth error (${statusCode})`,
-    }
-  }
-
-  if (statusCode === 429) {
-    return {
-      statusCode: 429,
-      code: 'AI_RATE_LIMIT',
-      message: 'Muitas solicitações de extração no momento. Tente novamente em alguns instantes.',
-      logMessage: 'AI provider rate limit',
-    }
-  }
-
-  return {
-    statusCode: 500,
-    code: 'EXTRACT_PROCESSING_ERROR',
-    message: 'Não foi possível extrair os dados da nota agora. Tente novamente em instantes.',
-    logMessage: `Unhandled extraction error: ${error.message}`,
-  }
-}
-
 export async function POST(request: Request) {
   try {
     const userId = await getSessionUserId(request)
@@ -152,76 +78,57 @@ export async function POST(request: Request) {
     }
 
     const fileValidation = validateUploadFile(file)
+
     if (!fileValidation.valid) {
       return Response.json(
-        {
-          error: fileValidation.message,
-          code: fileValidation.code,
-        },
+        { error: fileValidation.message, code: fileValidation.code },
         { status: fileValidation.statusCode }
       )
     }
 
-    const arrayBuffer = await file.arrayBuffer()
-    const base64 = Buffer.from(arrayBuffer).toString('base64')
+    const extraction = await extractInvoice(
+      {
+        data: Buffer.from(await file.arrayBuffer()).toString('base64'),
+        mediaType: file.type,
+        filename: file.name,
+      },
+      createInvoiceExtractor()
+    )
 
-    const result = await generateText({
-      model: google('gemini-2.5-flash'),
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Extraia os dados desta nota fiscal brasileira.
+    if (!extraction.ok) {
+      logExtractionError(extraction.error)
+      return Response.json(
+        { error: extraction.error.message, code: extraction.error.code },
+        { status: toHttpStatus(extraction.error) }
+      )
+    }
 
-Retorne os dados estruturados incluindo:
-- Nome da loja
-- CNPJ (se disponível)
-- Endereço (se disponível)
-- Número da nota
-- Data da compra (formato YYYY-MM-DD)
-- Lista de produtos com descrição, quantidade, preço unitário e preço total
-- Valor total da nota
-
-REGRAS IMPORTANTES para cada item:
-- unit_price é SEMPRE o preço por unidade (ou preço por kg para itens vendidos por peso)
-- total_price é SEMPRE unit_price × quantity
-- Para itens por PESO (hortifruti, carnes, frios): quantity é o peso em kg (ex: 0.44), unit_price é o preço por kg (ex: 18.91), total_price = peso × preço/kg
-- NUNCA inverta unit_price com total_price
-- Confira: unit_price × quantity deve ser aproximadamente igual a total_price
-
-Se algum campo não estiver disponível, use null.
-Todos os valores monetários devem estar em BRL (reais).`,
-            },
-            {
-              type: 'file',
-              data: base64,
-              mediaType: file.type,
-              filename: file.name,
-            },
-          ],
-        },
-      ],
-      output: Output.object({ schema: ExtractedInvoiceSchema }),
-    })
-
-    return Response.json({ success: true, data: result.output, filename: file.name })
+    return Response.json({ success: true, data: extraction.value, filename: file.name })
   } catch (error) {
-    const mappedError = getExtractPdfError(error)
-
-    console.error('[extract-pdf] error:', {
-      code: mappedError.code,
-      message: mappedError.logMessage,
-      statusCode: mappedError.statusCode,
-    })
-
+    console.error('[extract-pdf] error:', error instanceof Error ? error.message : 'Unknown error')
     return Response.json(
       {
-        error: mappedError.message,
-        code: mappedError.code,
+        error: 'Não foi possível processar o arquivo agora. Tente novamente em instantes.',
+        code: 'EXTRACT_UNKNOWN_ERROR',
       },
-      { status: mappedError.statusCode }
+      { status: 500 }
     )
   }
+}
+
+function toHttpStatus(error: InvoiceExtractionError) {
+  if (error.code === 'AI_RATE_LIMIT') return 429
+  if (error.category === 'authorization') return 503
+  if (error.category === 'validation') return 400
+  if (error.code === 'AI_CONFIG_MISSING') return 500
+  if (error.code === 'INVALID_EXTRACTION_OUTPUT') return 502
+  return 500
+}
+
+function logExtractionError(error: InvoiceExtractionError) {
+  console.error('[extract-pdf] error:', {
+    code: error.code,
+    category: error.category,
+    retryable: error.retryable,
+  })
 }

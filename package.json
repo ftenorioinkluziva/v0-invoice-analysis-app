@@ -13,10 +13,10 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.43",
     "@ai-sdk/react": "^3.0.0",
     "@better-fetch/fetch": "^1.1.21",
     "@hookform/resolvers": "^3.9.1",
+    "@openrouter/ai-sdk-provider": "^3.0.0",
     "@radix-ui/react-accordion": "1.2.12",
     "@radix-ui/react-alert-dialog": "1.1.15",
     "@radix-ui/react-aspect-ratio": "1.1.8",
@@ -45,7 +45,7 @@
     "@radix-ui/react-toggle-group": "1.1.11",
     "@radix-ui/react-tooltip": "1.2.8",
     "@vercel/analytics": "1.6.1",
-    "ai": "^6.0.0",
+    "ai": "^7.0.62",
     "autoprefixer": "^10.4.20",
     "better-auth": "^1.5.5",
     "class-variance-authority": "^0.7.1",

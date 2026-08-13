@@ -18,7 +18,7 @@ npm run test:e2e:ui  # Playwright E2E with UI
 
 ```bash
 DATABASE_URL="postgresql://..."              # Neon Postgres (required)
-GOOGLE_GENERATIVE_AI_API_KEY="..."          # Google AI — usado para extração de PDF (gemini-2.5-flash)
+OPENROUTER_API_KEY="..."                    # OpenRouter — provider do google/gemini-2.5-flash
 BETTER_AUTH_SECRET="..."                    # better-auth session secret
 GOOGLE_CLIENT_ID="..."                     # Google OAuth (optional)
 GOOGLE_CLIENT_SECRET="..."                 # Google OAuth (optional)
@@ -31,7 +31,7 @@ GOOGLE_CLIENT_SECRET="..."                 # Google OAuth (optional)
 ### Data Flow
 
 ```
-PDF upload → POST /api/extract-pdf (Gemini 2.5 Flash via AI SDK)
+PDF upload → POST /api/extract-pdf (OpenRouter / google/gemini-2.5-flash via AI SDK 7)
            → structured ExtractedInvoice (validated with Zod)
            → user confirms preview dialog
            → POST /api/invoices (saves to Postgres)
@@ -64,7 +64,7 @@ PDF upload → POST /api/extract-pdf (Gemini 2.5 Flash via AI SDK)
 
 | Route | Methods | Description |
 |-------|---------|-------------|
-| `/api/extract-pdf` | POST | Sends PDF/image as base64 to Gemini, returns `ExtractedInvoice` |
+| `/api/extract-pdf` | POST | Sends PDF/image as base64 through OpenRouter, returns `ExtractedInvoice` |
 | `/api/invoices` | GET, POST | List invoices (paginated); save invoice with store/product upsert + duplicate detection + price alerts |
 | `/api/analytics` | GET | Dashboard stats: monthly spending, variation, inflation index, top price increases, spending by month |
 | `/api/products` | GET | List products with search/category filter, purchase count, avg price, last purchase |
@@ -131,8 +131,8 @@ user_preferences     (id, user_id, alert_threshold: default 15%, notify_price_in
 
 - **Next.js 16** (App Router) + **React 19**
 - **Tailwind CSS v4** + **shadcn/ui** (components in `components/ui/`)
-- **AI SDK v6** (`ai` + `@ai-sdk/google`) with `generateText` + `Output.object()` for structured extraction
-- **Google Gemini 2.5 Flash** for PDF/image extraction (vision multimodal)
+- **AI SDK v7** (`ai` + `@openrouter/ai-sdk-provider`) with `generateText` + `Output.object()` for structured extraction
+- **OpenRouter** with `google/gemini-2.5-flash` for PDF/image extraction (vision multimodal)
 - **Better-auth v1** for authentication (email/password + Google OAuth)
 - **PostgreSQL** (`pg`) via pools and parameterized raw SQL
 - **SWR v2** for client-side data fetching
