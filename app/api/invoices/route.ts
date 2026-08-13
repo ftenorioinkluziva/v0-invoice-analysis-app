@@ -1,8 +1,9 @@
-import { sqlForClient } from '@/lib/db'
 import { SaveInvoiceSchema } from '@/lib/validations'
 import { getSessionUserId } from '@/lib/auth-session'
 import { withUserTransaction } from '@/lib/session-sql'
 import { createPgInvoiceRepository } from '@/lib/invoice-repository'
+import { createPgInvoiceListRepository } from '@/lib/invoice-list-repository'
+import { listInvoices } from '@/lib/invoice-list'
 import { importInvoice, InvoiceImportConflictError } from '@/lib/invoice-import'
 import { generatePriceAlerts } from '@/lib/price-alerts'
 import { createPgPriceAlertRepository } from '@/lib/price-alert-repository'
@@ -15,24 +16,7 @@ export async function GET(request: Request) {
     }
 
     const invoices = await withUserTransaction(userId, async (client) => {
-      const sql = sqlForClient(client)
-      return sql`
-      SELECT 
-        i.id,
-        i.invoice_number,
-        i.purchase_date,
-        i.total_amount,
-        i.pdf_filename,
-        i.processed_at,
-        s.name as store_name,
-        s.cnpj as store_cnpj,
-        (SELECT COUNT(*) FROM invoice_items WHERE invoice_id = i.id AND user_id = ${userId}) as item_count
-      FROM invoices i
-      LEFT JOIN stores s ON i.store_id = s.id
-      WHERE i.user_id = ${userId}
-      ORDER BY i.purchase_date DESC
-      LIMIT 50
-    `
+      return listInvoices(createPgInvoiceListRepository(client, userId))
     })
     return Response.json({ invoices })
   } catch (error) {

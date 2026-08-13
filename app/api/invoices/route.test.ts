@@ -177,3 +177,40 @@ describe('POST /api/invoices', () => {
     ])
   })
 })
+
+describe('GET /api/invoices', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    getSessionUserId.mockResolvedValue('user-1')
+  })
+
+  it('lists recent invoices through the tenant repository', async () => {
+    const rows = [{
+      id: 42,
+      invoice_number: 'NF-42',
+      purchase_date: '2026-08-13',
+      total_amount: '19.90',
+      pdf_filename: 'nota.pdf',
+      processed_at: '2026-08-13T10:00:00.000Z',
+      store_name: 'Mercado Teste',
+      store_cnpj: null,
+      item_count: '2',
+    }]
+    const client = {
+      query: vi.fn().mockResolvedValue({ rows }),
+      release: vi.fn(),
+    }
+    connect.mockResolvedValue(client)
+
+    const { GET } = await import('./route')
+    const response = await GET(new Request('http://localhost/api/invoices'))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ invoices: rows })
+    expect(client.query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM invoices i'),
+      ['user-1', 50]
+    )
+  })
+})
