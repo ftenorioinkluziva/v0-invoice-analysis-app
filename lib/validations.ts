@@ -47,6 +47,14 @@ export const UpdateAlertSchema = z.object({
   read: z.boolean(),
 })
 
+export const UpdatePreferencesSchema = z.object({
+  alert_threshold: z.number().finite().min(0).max(100).optional(),
+  notify_price_increase: z.boolean().optional(),
+  notify_opportunities: z.boolean().optional(),
+  notify_restock_reminders: z.boolean().optional(),
+  notify_weekly_summary: z.boolean().optional(),
+}).strict()
+
 export const ComparableBaseUnitSchema = z.enum(['kg', 'L', 'un'])
 export const ProductGroupSuggestionStatusSchema = z.enum(['pending', 'accepted', 'rejected', 'superseded'])
 export const HISTORY_PERIOD_DAYS = [30, 90, 180] as const
