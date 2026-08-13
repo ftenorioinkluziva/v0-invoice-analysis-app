@@ -5,6 +5,14 @@ import {
   ProductGroupResponseSchema,
   UpdateProductGroupSchema,
 } from '@/lib/validations'
+import {
+  notFoundError,
+  operationErrorResponse,
+  readJsonBody,
+  toOperationError,
+  unauthorizedError,
+  validationError,
+} from '@/lib/operation-error'
 
 export async function PATCH(
   request: Request,
@@ -13,24 +21,28 @@ export async function PATCH(
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const { id } = await params
     const groupId = Number(id)
 
     if (!Number.isInteger(groupId) || groupId <= 0) {
-      return Response.json({ error: 'Product group not found' }, { status: 404 })
+      return operationErrorResponse(notFoundError('PRODUCT_GROUP_NOT_FOUND', 'Product group not found'))
     }
 
     const body = await readJsonBody(request)
-    if (body === null) {
-      return Response.json({ error: 'Invalid request' }, { status: 400 })
-    }
 
     const parsed = UpdateProductGroupSchema.safeParse(body)
     if (!parsed.success) {
-      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+      return operationErrorResponse(
+        validationError(
+          'INVALID_PRODUCT_GROUP_UPDATE_REQUEST',
+          'Invalid request',
+          parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: { details: parsed.error.flatten() } }
+      )
     }
 
     const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
@@ -52,7 +64,7 @@ export async function PATCH(
 
       if (result.rows.length === 0) {
         await client.query('ROLLBACK')
-        return Response.json({ error: 'Product group not found' }, { status: 404 })
+        return operationErrorResponse(notFoundError('PRODUCT_GROUP_NOT_FOUND', 'Product group not found'))
       }
 
       await client.query('COMMIT')
@@ -63,7 +75,12 @@ export async function PATCH(
       await client.query('ROLLBACK')
 
       if (isUniqueViolation(error)) {
-        return Response.json({ error: 'Product group already exists' }, { status: 409 })
+        return operationErrorResponse({
+          code: 'PRODUCT_GROUP_ALREADY_EXISTS',
+          category: 'conflict',
+          message: 'Product group already exists',
+          retryable: false,
+        })
       }
 
       throw error
@@ -72,15 +89,10 @@ export async function PATCH(
     }
   } catch (error) {
     console.error('Error updating product group:', error)
-    return Response.json({ error: 'Failed to update product group' }, { status: 500 })
-  }
-}
-
-async function readJsonBody(request: Request) {
-  try {
-    return await request.json()
-  } catch {
-    return null
+    return operationErrorResponse(toOperationError(error, {
+      code: 'PRODUCT_GROUP_UPDATE_FAILED',
+      message: 'Failed to update product group',
+    }))
   }
 }
 

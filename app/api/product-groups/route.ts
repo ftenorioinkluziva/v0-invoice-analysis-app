@@ -6,6 +6,13 @@ import {
   ProductGroupResponseSchema,
   parseHistoryPeriodDaysParam,
 } from '@/lib/validations'
+import {
+  operationErrorResponse,
+  readJsonBody,
+  toOperationError,
+  unauthorizedError,
+  validationError,
+} from '@/lib/operation-error'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -14,7 +21,7 @@ export async function GET(request: Request) {
   const baseUnit = searchParams.get('base_unit')?.trim() ?? ''
 
   if (view !== 'comparable' && view !== 'all') {
-    return Response.json({ error: 'Invalid view' }, { status: 400 })
+    return operationErrorResponse(validationError('INVALID_PRODUCT_GROUP_VIEW', 'Invalid view'))
   }
 
   const periodDaysResult = view === 'comparable'
@@ -22,13 +29,13 @@ export async function GET(request: Request) {
     : { success: true as const, data: null }
 
   if (!periodDaysResult.success) {
-    return Response.json({ error: 'Invalid period_days' }, { status: 400 })
+    return operationErrorResponse(validationError('INVALID_PERIOD_DAYS', 'Invalid period_days'))
   }
 
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     return await withUserTransaction(userId, async (client) => {
@@ -111,7 +118,10 @@ export async function GET(request: Request) {
     }
 
     console.error('Error fetching comparable product groups:', error)
-    return Response.json({ error: 'Failed to fetch product groups' }, { status: 500 })
+    return operationErrorResponse(toOperationError(error, {
+      code: 'PRODUCT_GROUPS_FETCH_FAILED',
+      message: 'Failed to fetch product groups',
+    }))
   }
 }
 
@@ -119,17 +129,21 @@ export async function POST(request: Request) {
   try {
     const userId = await getSessionUserId(request)
     if (!userId) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      return operationErrorResponse(unauthorizedError())
     }
 
     const body = await readJsonBody(request)
-    if (body === null) {
-      return Response.json({ error: 'Invalid request' }, { status: 400 })
-    }
 
     const parsed = CreateProductGroupSchema.safeParse(body)
     if (!parsed.success) {
-      return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
+      return operationErrorResponse(
+        validationError(
+          'INVALID_PRODUCT_GROUP_REQUEST',
+          'Invalid request',
+          parsed.error.issues.map(issue => issue.path.join('.'))
+        ),
+        { extra: { details: parsed.error.flatten() } }
+      )
     }
 
     return await withUserTransaction(userId, async (client) => {
@@ -144,22 +158,22 @@ export async function POST(request: Request) {
         return Response.json(response, { status: 201 })
       } catch (error) {
         if (isUniqueViolation(error)) {
-          return Response.json({ error: 'Product group already exists' }, { status: 409 })
+          return operationErrorResponse({
+            code: 'PRODUCT_GROUP_ALREADY_EXISTS',
+            category: 'conflict',
+            message: 'Product group already exists',
+            retryable: false,
+          })
         }
         throw error
       }
     })
   } catch (error) {
     console.error('Error creating product group:', error)
-    return Response.json({ error: 'Failed to create product group' }, { status: 500 })
-  }
-}
-
-async function readJsonBody(request: Request) {
-  try {
-    return await request.json()
-  } catch {
-    return null
+    return operationErrorResponse(toOperationError(error, {
+      code: 'PRODUCT_GROUP_CREATE_FAILED',
+      message: 'Failed to create product group',
+    }))
   }
 }
 
