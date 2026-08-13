@@ -1,6 +1,5 @@
-import { Pool } from 'pg'
 import { getSessionUserId } from '@/lib/auth-session'
-import { setAppUserId } from '@/lib/session-sql'
+import { withUserTransaction } from '@/lib/session-sql'
 import { acceptProductGroupSuggestion } from '@/lib/product-group-suggestions'
 import {
   notFoundError,
@@ -25,21 +24,13 @@ export async function POST(
       return operationErrorResponse(notFoundError('SUGGESTION_NOT_FOUND', 'Suggestion not found'))
     }
 
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL! })
-    const client = await pool.connect()
-
-    try {
-      await client.query('BEGIN')
-      await setAppUserId(client, userId)
-
+    return await withUserTransaction(userId, async client => {
       const result = await acceptProductGroupSuggestion(client, suggestionId, userId)
       if (result.kind === 'not_found') {
-        await client.query('ROLLBACK')
         return operationErrorResponse(notFoundError('SUGGESTION_NOT_FOUND', 'Suggestion not found'))
       }
 
       if (result.kind === 'invalid') {
-        await client.query('ROLLBACK')
         return operationErrorResponse({
           code: 'SUGGESTION_STATE_CONFLICT',
           category: 'conflict',
@@ -48,14 +39,8 @@ export async function POST(
         })
       }
 
-      await client.query('COMMIT')
       return Response.json(result.suggestion)
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error accepting product group suggestion:', error)
     return operationErrorResponse(toOperationError(error, {

@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getSessionUserId = vi.fn()
-const setAppUserId = vi.fn()
+const withUserTransaction = vi.fn(async (_userId: string, operation: (client: unknown) => unknown) =>
+  operation(await connect())
+)
 const connect = vi.fn()
 
 vi.mock('@/lib/auth-session', () => ({
@@ -9,7 +11,7 @@ vi.mock('@/lib/auth-session', () => ({
 }))
 
 vi.mock('@/lib/session-sql', () => ({
-  setAppUserId,
+  withUserTransaction,
 }))
 
 vi.mock('pg', () => ({
@@ -25,7 +27,6 @@ describe('/api/product-group-suggestions/[id]/accept and /reject', () => {
     vi.resetModules()
     vi.clearAllMocks()
     getSessionUserId.mockResolvedValue('user-1')
-    setAppUserId.mockResolvedValue(undefined)
   })
 
   it('accepts a pending suggestion and audits the group association', async () => {
@@ -105,6 +106,7 @@ describe('/api/product-group-suggestions/[id]/accept and /reject', () => {
     )
 
     expect(response.status).toBe(200)
+    expect(withUserTransaction).toHaveBeenCalledWith('user-1', expect.any(Function))
     await expect(response.json()).resolves.toEqual({
       id: 14,
       source_product_id: 7,
