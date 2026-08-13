@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getSessionUserId = vi.fn()
-const setAppUserId = vi.fn()
+const withUserTransaction = vi.fn(async (
+  _userId: string,
+  operation: (client: ReturnType<typeof createClient>) => unknown
+) => operation(await connect()))
 const connect = vi.fn()
 
 vi.mock('@/lib/auth-session', () => ({
@@ -9,15 +12,7 @@ vi.mock('@/lib/auth-session', () => ({
 }))
 
 vi.mock('@/lib/session-sql', () => ({
-  setAppUserId,
-}))
-
-vi.mock('pg', () => ({
-  Pool: vi.fn(function MockPool() {
-    return {
-      connect,
-    }
-  }),
+  withUserTransaction,
 }))
 
 describe('/api/products/[id]/group-assignment', () => {
@@ -25,7 +20,6 @@ describe('/api/products/[id]/group-assignment', () => {
     vi.resetModules()
     vi.clearAllMocks()
     getSessionUserId.mockResolvedValue('user-1')
-    setAppUserId.mockResolvedValue(undefined)
   })
 
   it('associates the product when evidence is missing but explicitly allowed', async () => {
@@ -66,6 +60,7 @@ describe('/api/products/[id]/group-assignment', () => {
     )
 
     expect(response.status).toBe(200)
+    expect(withUserTransaction).toHaveBeenCalledWith('user-1', expect.any(Function))
     await expect(response.json()).resolves.toEqual({
       product_id: 7,
       group_id: 3,

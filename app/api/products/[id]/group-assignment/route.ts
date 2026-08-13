@@ -1,7 +1,6 @@
 import { PoolClient } from 'pg'
-import { getPool } from '@/lib/db-pool'
 import { getSessionUserId } from '@/lib/auth-session'
-import { setAppUserId } from '@/lib/session-sql'
+import { withUserTransaction } from '@/lib/session-sql'
 import { backfillComparablePricingForProduct } from '@/lib/backfill-comparable'
 import {
   AssignProductGroupSchema,
@@ -47,31 +46,22 @@ export async function POST(
       return Response.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 })
     }
 
-    const client = await getPool().connect()
-
-    try {
-      await client.query('BEGIN')
-      await setAppUserId(client, userId)
-
+    return await withUserTransaction(userId, async (client) => {
       const product = await getProduct(client, productId, userId)
       if (!product) {
-        await client.query('ROLLBACK')
         return Response.json({ error: 'Product not found' }, { status: 404 })
       }
 
       const group = await getGroup(client, parsed.data.group_id, userId)
       if (!group) {
-        await client.query('ROLLBACK')
         return Response.json({ error: 'Product group not found' }, { status: 404 })
       }
 
       if (product.comparable_group_id === group.id) {
-        await client.query('COMMIT')
         return Response.json(buildAssignmentResponse(product.id, group))
       }
 
       if (product.comparable_group_id !== null) {
-        await client.query('ROLLBACK')
         return Response.json({ error: 'Product already assigned to another group' }, { status: 409 })
       }
 
@@ -92,12 +82,10 @@ export async function POST(
       const evidenceUnit = latestComparableEvidence.rows[0]?.comparable_base_unit ?? null
 
       if (!evidenceUnit && !parsed.data.allow_missing_comparable_evidence) {
-        await client.query('ROLLBACK')
         return Response.json({ error: 'Missing comparable evidence for product' }, { status: 400 })
       }
 
       if (evidenceUnit && evidenceUnit !== group.base_unit) {
-        await client.query('ROLLBACK')
         return Response.json({ error: 'Comparable evidence base unit is incompatible with product group' }, { status: 400 })
       }
 
@@ -126,14 +114,8 @@ export async function POST(
         [product.id, group.id, userId, userId]
       )
 
-      await client.query('COMMIT')
       return Response.json(buildAssignmentResponse(product.id, group))
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error assigning product group:', error)
     return Response.json({ error: 'Failed to assign product group' }, { status: 500 })
@@ -157,20 +139,13 @@ export async function DELETE(
       return Response.json({ error: 'Product not found' }, { status: 404 })
     }
 
-    const client = await getPool().connect()
-
-    try {
-      await client.query('BEGIN')
-      await setAppUserId(client, userId)
-
+    return await withUserTransaction(userId, async (client) => {
       const product = await getProduct(client, productId, userId)
       if (!product) {
-        await client.query('ROLLBACK')
         return Response.json({ error: 'Product not found' }, { status: 404 })
       }
 
       if (product.comparable_group_id === null) {
-        await client.query('COMMIT')
         return new Response(null, { status: 204 })
       }
 
@@ -197,14 +172,8 @@ export async function DELETE(
         [product.id, product.comparable_group_id, userId, userId]
       )
 
-      await client.query('COMMIT')
       return new Response(null, { status: 204 })
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
-    } finally {
-      client.release()
-    }
+    })
   } catch (error) {
     console.error('Error removing product group assignment:', error)
     return Response.json({ error: 'Failed to remove product group assignment' }, { status: 500 })
