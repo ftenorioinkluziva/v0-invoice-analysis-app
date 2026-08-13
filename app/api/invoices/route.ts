@@ -38,15 +38,14 @@ export async function POST(request: Request) {
     }
     const result = await withUserTransaction(userId, async client => {
       const repository = createPgInvoiceRepository(client, userId)
-      return importInvoice(parsed.data, repository)
-    })
-
-    await withUserTransaction(userId, async client => {
+      const imported = await importInvoice(parsed.data, repository)
       await generatePriceAlerts(
         parsed.data.data.items,
         createPgPriceAlertRepository(client, userId),
-        { sourceInvoiceId: result.invoiceId }
+        { sourceInvoiceId: imported.invoiceId }
       )
+
+      return imported
     })
 
     return Response.json({

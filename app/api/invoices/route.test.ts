@@ -116,6 +116,7 @@ describe('POST /api/invoices', () => {
     ])
 
     expect(response.status).toBe(200)
+    expect(withUserTransaction).toHaveBeenCalledTimes(1)
     expect(insertedItemCalls).toHaveLength(1)
     expect(insertedItemCalls[0]).toEqual([
       200,
