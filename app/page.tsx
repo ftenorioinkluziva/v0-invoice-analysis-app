@@ -46,12 +46,12 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    <div className="flex flex-col gap-5 p-4">
       {/* Header */}
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between border-b border-border pb-3">
         <div>
-          <h1 className="text-xl font-bold text-foreground">NoteWise</h1>
-          <p className="text-sm text-muted-foreground">Análise de notas fiscais</p>
+          <h1 className="type-display text-foreground">NoteWise</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Análise de notas fiscais</p>
         </div>
         <Button
           variant="ghost"

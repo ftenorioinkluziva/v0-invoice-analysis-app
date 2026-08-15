@@ -5,6 +5,7 @@ import {
   getShoppingListItemComparableContext,
   getShoppingListItemTotal,
   getShoppingListItemUnitPrice,
+  partitionShoppingListItems,
 } from '@/lib/shopping-list'
 
 describe('shopping list helpers', () => {
@@ -50,5 +51,17 @@ describe('shopping list helpers', () => {
     expect(getComparableReferenceLabel('kg')).toBe('Referencia em R$/kg')
     expect(getComparableReferenceLabel('L')).toBe('Referencia em R$/L')
     expect(getComparableReferenceLabel(null)).toBeNull()
+  })
+
+  it('partitions pending items before checked items without changing their internal order', () => {
+    const result = partitionShoppingListItems([
+      { id: 1, checked: true },
+      { id: 2, checked: false },
+      { id: 3, checked: false },
+      { id: 4, checked: true },
+    ])
+
+    expect(result.pending.map((item) => item.id)).toEqual([2, 3])
+    expect(result.checked.map((item) => item.id)).toEqual([1, 4])
   })
 })

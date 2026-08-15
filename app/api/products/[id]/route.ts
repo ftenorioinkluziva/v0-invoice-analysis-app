@@ -72,7 +72,10 @@ export async function GET(
             JOIN invoices i ON ii.invoice_id = i.id AND i.user_id = ii.user_id
             JOIN stores s ON i.store_id = s.id AND s.user_id = ii.user_id
             WHERE ii.product_id = $1 AND ii.user_id = $2
-              AND i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+              AND (
+                $3::int IS NULL
+                OR i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+              )
             ORDER BY i.purchase_date DESC
             LIMIT 20
           ),
@@ -84,17 +87,26 @@ export async function GET(
               (SELECT unit_price FROM invoice_items ii2
                 JOIN invoices i2 ON ii2.invoice_id = i2.id AND i2.user_id = ii2.user_id
                 WHERE ii2.product_id = $1 AND ii2.user_id = $2
-                  AND i2.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+                  AND (
+                    $3::int IS NULL
+                    OR i2.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+                  )
                 ORDER BY i2.purchase_date ASC LIMIT 1) AS first_price,
               (SELECT unit_price FROM invoice_items ii3
                 JOIN invoices i3 ON ii3.invoice_id = i3.id AND i3.user_id = ii3.user_id
                 WHERE ii3.product_id = $1 AND ii3.user_id = $2
-                  AND i3.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+                  AND (
+                    $3::int IS NULL
+                    OR i3.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+                  )
                 ORDER BY i3.purchase_date DESC LIMIT 1) AS last_price
             FROM invoice_items ii
             JOIN invoices i ON ii.invoice_id = i.id AND i.user_id = ii.user_id
             WHERE ii.product_id = $1 AND ii.user_id = $2
-              AND i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+              AND (
+                $3::int IS NULL
+                OR i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+              )
           )
           SELECT
             (SELECT row_to_json(product_row) FROM product_row) AS product,

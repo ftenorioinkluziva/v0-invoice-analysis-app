@@ -125,7 +125,7 @@ describe('GET /api/product-groups', () => {
   it('returns comparable groups ordered by display name', async () => {
     const client = createClient(async (queryText, params) => {
       if (queryText.includes('FROM product_groups pg') && queryText.includes('ORDER BY pg.display_name ASC')) {
-        expect(params).toEqual(['user-1', 'leite', '%leite%', 90])
+        expect(params).toEqual(['user-1', 'leite', ['%leite%'], 90])
         return {
           rows: [
             {
@@ -167,13 +167,53 @@ describe('GET /api/product-groups', () => {
     })
   })
 
+  it('returns comparable groups across the full history', async () => {
+    const client = createClient(async (queryText, params) => {
+      if (
+        queryText.includes('FROM product_groups pg')
+        && queryText.includes('$4::int IS NULL')
+      ) {
+        expect(params).toEqual(['user-1', 'leite', ['%leite%'], null])
+        return {
+          rows: [{
+            id: 9,
+            display_name: 'Leite Po',
+            base_unit: 'kg',
+            comparable_occurrences: '6',
+            min_unit_price: '37.475',
+            avg_unit_price: '40.8879',
+            max_unit_price: '49.9667',
+          }],
+        }
+      }
+
+      throw new Error(`Unexpected query: ${queryText}`)
+    })
+
+    connect.mockResolvedValue(client)
+
+    const { GET } = await import('./route')
+    const response = await GET(
+      new Request('http://localhost/api/product-groups?view=comparable&search=leite&period_days=all')
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      groups: [{
+        display_name: 'Leite Po',
+        comparable_occurrences: 6,
+        avg_unit_price: 40.8879,
+      }],
+    })
+  })
+
   it('returns groups with zeroed metrics when they have no comparable occurrences in the selected period', async () => {
     const client = createClient(async (queryText, params) => {
       if (
         queryText.includes('LEFT JOIN invoice_items ii')
         && queryText.includes('MIN(CASE WHEN i.id IS NOT NULL THEN ii.comparable_unit_price END)')
       ) {
-        expect(params).toEqual(['user-1', 'creme', '%creme%', 90])
+        expect(params).toEqual(['user-1', 'creme', ['%creme%'], 90])
         return {
           rows: [
             {
@@ -218,10 +258,10 @@ describe('GET /api/product-groups', () => {
     const client = createClient(async (queryText, params) => {
       if (
         queryText.includes('FROM product_groups pg')
-        && queryText.includes('search_products.normalized_name ILIKE $3')
-        && queryText.includes('COALESCE(search_products.brand, \'\') ILIKE $3')
+        && queryText.includes('search_products.normalized_name ILIKE search_term.pattern')
+        && queryText.includes('COALESCE(search_products.brand, \'\') ILIKE search_term.pattern')
       ) {
-        expect(params).toEqual(['user-1', 'pilao', '%pilao%', 90])
+        expect(params).toEqual(['user-1', 'pilao', ['%pilao%'], 90])
         return {
           rows: [
             {
@@ -263,10 +303,34 @@ describe('GET /api/product-groups', () => {
     })
   })
 
+  it('requires every word when searching comparable groups and their products', async () => {
+    const client = createClient(async (queryText, params) => {
+      if (
+        queryText.includes('FROM product_groups pg')
+        && queryText.includes('FROM unnest($3::text[]) AS search_term(pattern)')
+      ) {
+        expect(params).toEqual(['user-1', 'leite po', ['%leite%', '%po%'], 90])
+        return { rows: [] }
+      }
+
+      throw new Error(`Unexpected query: ${queryText}`)
+    })
+
+    connect.mockResolvedValue(client)
+
+    const { GET } = await import('./route')
+    const response = await GET(
+      new Request('http://localhost/api/product-groups?view=comparable&search=leite%20po&period_days=90')
+    )
+
+    expect(response.status).toBe(200)
+  })
+
   it('returns all groups for manual association, including newly created ones', async () => {
     const client = createClient(async (queryText, params) => {
       if (queryText.includes('FROM product_groups pg') && queryText.includes('0::numeric AS min_unit_price')) {
-        expect(params).toEqual(['user-1', 'mussa', '%mussa%', 'kg'])
+        expect(params).toEqual(['user-1', 'mussa', ['%mussa%'], 'kg'])
+        expect(queryText).toContain('pg.display_name ILIKE ALL($3::text[])')
         return {
           rows: [
             {

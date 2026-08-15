@@ -115,6 +115,46 @@ describe('GET /api/product-groups/[id]/history', () => {
     })
   })
 
+  it('uses no date cutoff for the full group history', async () => {
+    const client = createClient(async (queryText, params) => {
+      if (queryText.includes('FROM product_groups') && queryText.includes('WHERE id = $1 AND user_id = $2')) {
+        return { rows: [{ id: 9, display_name: 'Leite Po', base_unit: 'kg' }] }
+      }
+
+      if (queryText.includes('FROM products p') && queryText.includes('ORDER BY product_label ASC')) {
+        return { rows: [] }
+      }
+
+      if (queryText.includes('MIN(ii.comparable_unit_price) AS min_unit_price')) {
+        expect(queryText).toContain('$3::int IS NULL')
+        expect(params).toEqual([9, 'user-1', null])
+        return { rows: [{ min_unit_price: '37.475', avg_unit_price: '40.8879', max_unit_price: '49.9667' }] }
+      }
+
+      if (queryText.includes('ii.id AS invoice_item_id')) {
+        expect(queryText).toContain('$3::int IS NULL')
+        expect(params).toEqual([9, 'user-1', null])
+        return { rows: [] }
+      }
+
+      throw new Error(`Unexpected query: ${queryText}`)
+    })
+
+    connect.mockResolvedValue(client)
+
+    const { GET } = await import('./route')
+    const response = await GET(
+      new Request('http://localhost/api/product-groups/9/history?period_days=all'),
+      { params: Promise.resolve({ id: '9' }) }
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      display_name: 'Leite Po',
+      aggregates: { avg_unit_price: 40.8879 },
+    })
+  })
+
   it('returns 404 when comparable group schema is not available yet', async () => {
     const client = createClient(async (queryText) => {
       if (queryText.includes('FROM product_groups') && queryText.includes('WHERE id = $1 AND user_id = $2')) {

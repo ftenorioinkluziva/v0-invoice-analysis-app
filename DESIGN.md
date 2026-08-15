@@ -2,56 +2,56 @@
 name: NoteWise
 description: Mobile-first Brazilian invoice analysis and price history app.
 colors:
-  deep-register-bg: "oklch(0.07 0 0)"
-  ink-high: "oklch(0.98 0 0)"
-  ledger-card: "oklch(0.13 0 0)"
-  receipt-popover: "oklch(0.12 0 0)"
-  verified-teal: "oklch(0.78 0.16 165)"
-  teal-ink: "oklch(0.12 0 0)"
-  quiet-panel: "oklch(0.18 0 0)"
-  muted-ink: "oklch(0.68 0 0)"
-  alert-red: "oklch(0.65 0.2 25)"
-  savings-green: "oklch(0.7 0.17 145)"
-  caution-yellow: "oklch(0.75 0.15 75)"
-  divider: "oklch(0.28 0 0)"
-  input-field: "oklch(0.34 0 0)"
-  chart-blue: "oklch(0.6 0.15 250)"
+  deep-register-bg: "oklch(0.18 0.008 250)"
+  ink-high: "oklch(0.97 0.005 250)"
+  ledger-card: "oklch(0.22 0.01 250)"
+  receipt-popover: "oklch(0.24 0.012 250)"
+  action-blue: "oklch(0.72 0.14 245)"
+  blue-ink: "oklch(0.17 0.008 250)"
+  quiet-panel: "oklch(0.26 0.012 250)"
+  muted-ink: "oklch(0.7 0.014 250)"
+  alert-red: "oklch(0.64 0.21 25)"
+  savings-green: "oklch(0.72 0.17 145)"
+  caution-yellow: "oklch(0.78 0.16 78)"
+  divider: "oklch(0.3 0.012 250)"
+  input-field: "oklch(0.195 0.008 250)"
+  chart-blue: "oklch(0.72 0.12 205)"
 typography:
   display:
-    fontFamily: "Geist, Geist Fallback, system-ui, sans-serif"
-    fontSize: "20px"
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "24px"
     fontWeight: 700
     lineHeight: 1.1
     letterSpacing: "0"
   headline:
-    fontFamily: "Geist, Geist Fallback, system-ui, sans-serif"
-    fontSize: "18px"
-    fontWeight: 600
-    lineHeight: 1.2
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "20px"
+    fontWeight: 650
+    lineHeight: 1.3
     letterSpacing: "0"
   title:
-    fontFamily: "Geist, Geist Fallback, system-ui, sans-serif"
-    fontSize: "16px"
-    fontWeight: 600
-    lineHeight: 1.25
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontSize: "18px"
+    fontWeight: 650
+    lineHeight: 1.4
     letterSpacing: "0"
   body:
-    fontFamily: "Geist, Geist Fallback, system-ui, sans-serif"
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "14px"
-    fontWeight: 400
-    lineHeight: 1.5
+    fontWeight: 500
+    lineHeight: 1.43
     letterSpacing: "0"
   label:
-    fontFamily: "Geist, Geist Fallback, system-ui, sans-serif"
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
     fontSize: "12px"
-    fontWeight: 500
-    lineHeight: 1.25
-    letterSpacing: "0"
-  data:
-    fontFamily: "Geist Mono, Geist Mono Fallback, monospace"
-    fontSize: "14px"
     fontWeight: 600
-    lineHeight: 1.15
+    lineHeight: 1.33
+    letterSpacing: "0.06em"
+  data:
+    fontFamily: "ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace"
+    fontSize: "16px"
+    fontWeight: 650
+    lineHeight: 1.5
     letterSpacing: "0"
 rounded:
   sm: "8px"
@@ -66,14 +66,14 @@ spacing:
   xl: "24px"
 components:
   button-primary:
-    backgroundColor: "{colors.verified-teal}"
-    textColor: "{colors.teal-ink}"
+    backgroundColor: "{colors.action-blue}"
+    textColor: "{colors.blue-ink}"
     typography: "{typography.body}"
     rounded: "{rounded.sm}"
     padding: "8px 16px"
     height: "36px"
   button-outline:
-    backgroundColor: "{colors.deep-register-bg}"
+    backgroundColor: "transparent"
     textColor: "{colors.ink-high}"
     typography: "{typography.body}"
     rounded: "{rounded.sm}"
@@ -92,8 +92,8 @@ components:
     padding: "4px 12px"
     height: "36px"
   badge-primary:
-    backgroundColor: "{colors.verified-teal}"
-    textColor: "{colors.teal-ink}"
+    backgroundColor: "{colors.action-blue}"
+    textColor: "{colors.blue-ink}"
     typography: "{typography.label}"
     rounded: "{rounded.sm}"
     padding: "2px 8px"
@@ -103,13 +103,13 @@ components:
 
 ## Overview
 
-NoteWise should feel like a compact ledger that lives on a phone: dark, legible, fast to scan, and built around the next useful action. The system is restrained because the product is task-heavy. Teal is reserved for action, selection, confirmation, and trustworthy data emphasis.
+NoteWise should feel like a compact ledger that lives on a phone: dark, legible, fast to scan, and built around the next useful action. The system is restrained because the product is task-heavy. Blue is reserved for action, selection, confirmation, and trustworthy data emphasis.
 
 ## Rules
 
 - Keep the upload action visible and primary on the dashboard.
-- Use verified teal for primary action, active navigation, upload, and chart continuity.
-- Use Geist Mono for BRL values and percentages that users compare.
+- Use action blue for primary action, active navigation, upload, and chart continuity.
+- Use mono para valores em BRL e percentuais que o usuario precisa comparar.
 - Pair semantic color with labels or icons for price increases, savings, and errors.
 - Avoid glossy gradients, glassmorphism, gradient text, colored side-stripe borders, and oversized marketing blocks.
 - Keep mobile cards compact, with clear spacing and predictable repeated row patterns.

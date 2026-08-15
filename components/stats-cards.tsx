@@ -52,12 +52,12 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
           <div className="flex items-start justify-between">
             <div>
               <p className="text-sm text-muted-foreground capitalize">{monthName}</p>
-              <p className="mt-1 font-mono text-3xl font-bold tracking-tight text-foreground">
+              <p className="type-headline mt-1 text-foreground">
                 {formatCurrency(stats.total_spent_month)}
               </p>
             </div>
             <div
-              className={`flex items-center gap-1 rounded-full px-2 py-1 text-sm font-medium ${
+              className={`type-label flex items-center gap-1 rounded-full px-2 py-1 ${
                 stats.month_variation_percent > 0
                   ? 'bg-destructive/15 text-destructive'
                   : stats.month_variation_percent < 0
@@ -97,7 +97,7 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
 
         <div className="flex flex-col items-center gap-0.5 px-2 py-2.5">
           <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
-          <p className="font-mono text-sm font-semibold leading-none text-foreground">
+          <p className="type-data text-foreground">
             {stats.total_invoices}
           </p>
           <p className="text-[10px] text-muted-foreground">Notas</p>
@@ -105,7 +105,7 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
 
         <div className="flex flex-col items-center gap-0.5 px-2 py-2.5">
           <Package className="h-3.5 w-3.5 text-muted-foreground" />
-          <p className="font-mono text-sm font-semibold leading-none text-foreground">
+          <p className="type-data text-foreground">
             {stats.total_products}
           </p>
           <p className="text-[10px] text-muted-foreground">Produtos</p>

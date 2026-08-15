@@ -40,6 +40,7 @@ import {
   getShoppingListItemComparableContext,
   getShoppingListItemTotal,
   getShoppingListItemUnitPrice,
+  partitionShoppingListItems,
   type ShoppingListDetailItem,
 } from '@/lib/shopping-list'
 import { cn } from '@/lib/utils'
@@ -265,13 +266,22 @@ export default function ListaPage() {
     }
   }
 
-  // Group items by category
-  const groupedItems = listDetails?.items.reduce((acc, item) => {
-    const category = item.category || 'Outros'
-    if (!acc[category]) acc[category] = []
-    acc[category].push(item)
-    return acc
-  }, {} as Record<string, ShoppingListDetailItem[]>)
+  const persistedItems = partitionShoppingListItems(listDetails?.items ?? [])
+  const localItems = partitionShoppingListItems(customItems)
+  const itemSections = [
+    {
+      key: 'pending',
+      label: null,
+      groups: groupItemsByCategory(persistedItems.pending),
+      customItems: localItems.pending,
+    },
+    {
+      key: 'checked',
+      label: 'Comprados',
+      groups: groupItemsByCategory(persistedItems.checked),
+      customItems: localItems.checked,
+    },
+  ].filter((section) => Object.keys(section.groups).length > 0 || section.customItems.length > 0)
 
   const estimatedTotal =
     listDetails?.items.reduce((sum, item) => sum + getShoppingListItemTotal(item), 0) || 0
@@ -329,10 +339,10 @@ export default function ListaPage() {
                 {activeLists.map((list) => (
                   <Card
                     key={list.id}
-                    className="cursor-pointer bg-card transition-colors hover:bg-secondary/50 focus-within:ring-2 focus-within:ring-ring"
+                    className="cursor-pointer bg-card p-0 transition-colors hover:bg-secondary/50 focus-within:ring-2 focus-within:ring-ring"
                     onClick={() => setSelectedListId(list.id)}
                   >
-                    <CardContent className="flex min-h-24 items-center justify-between gap-3 p-4">
+                    <CardContent className="flex min-h-20 items-center justify-between gap-3 p-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <div className="rounded-lg bg-primary/10 p-2">
                           <ShoppingCart className="h-5 w-5 text-primary" />
@@ -379,10 +389,10 @@ export default function ListaPage() {
                         {completedLists.map((list) => (
                           <Card
                             key={list.id}
-                            className="cursor-pointer bg-card/50 transition-colors hover:bg-secondary/50"
+                            className="cursor-pointer bg-card/50 p-0 transition-colors hover:bg-secondary/50"
                             onClick={() => setSelectedListId(list.id)}
                           >
-                            <CardContent className="flex items-center justify-between gap-3 p-4 opacity-80">
+                            <CardContent className="flex min-h-20 items-center justify-between gap-3 p-3 opacity-80">
                               <div className="flex min-w-0 items-center gap-3">
                                 <div className="rounded-lg bg-secondary p-2">
                                   <Check className="h-5 w-5 text-muted-foreground" />
@@ -461,10 +471,55 @@ export default function ListaPage() {
 
       <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_20rem] md:items-start">
         <div className="space-y-4">
+          {/* Search catalog */}
+          <div className="relative">
+            <Input
+              placeholder="Buscar produto no catálogo..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-11 bg-secondary/50"
+            />
+            {searchQuery && (
+              <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+                <div className="max-h-56 overflow-y-auto overscroll-contain p-1">
+                  {productsData?.products?.slice(0, 5).map((product) => (
+                    <button
+                      key={product.id}
+                      className="flex min-h-12 w-full items-center justify-between rounded-lg p-2.5 text-left transition-colors hover:bg-secondary/50"
+                      onClick={() => handleAddItem(product.id)}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium capitalize">{product.normalized_name}</p>
+                        <p className="text-xs text-muted-foreground">{product.category}</p>
+                      </div>
+                      <Plus className="ml-2 h-4 w-4 shrink-0 text-primary" />
+                    </button>
+                  ))}
+                  {(!productsData?.products || productsData.products.length === 0) && (
+                    <p className="px-2 py-3 text-center text-sm text-muted-foreground">
+                      Nenhum produto encontrado no catálogo
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Items by category */}
-          {groupedItems && Object.keys(groupedItems).length > 0 ? (
-            <div className="space-y-5">
-              {Object.entries(groupedItems).map(([category, items]) => (
+          {itemSections.length > 0 ? (
+            <div className="space-y-6">
+              {itemSections.map((section) => (
+                <section key={section.key} className="space-y-5">
+                  {section.label && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Check className="h-3.5 w-3.5 text-muted-foreground" />
+                      <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                        {section.label}
+                      </h2>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
+                  )}
+                  {Object.entries(section.groups).map(([category, items]) => (
                 <div key={category}>
                   <div className="mb-2 flex items-center gap-2">
                     <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">{category}</span>
@@ -475,56 +530,57 @@ export default function ListaPage() {
                       <Card
                         key={item.id}
                         className={cn(
-                          'bg-card transition-colors duration-200',
+                          'bg-card p-0 transition-colors duration-200',
                           item.checked ? 'border-border/60 opacity-60' : 'border-primary/30'
                         )}
                       >
-                        <CardContent className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+                        <CardContent className="grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[auto_auto] items-start gap-x-2.5 gap-y-1.5 p-2.5 sm:gap-x-3 sm:p-3">
                           <Checkbox
                             checked={item.checked}
                             onCheckedChange={(checked) =>
                               handleToggleItem(item.id, checked as boolean)
                             }
-                            className="mt-0.5 h-7 w-7 shrink-0 rounded-md sm:mt-0"
+                            className="row-span-2 mt-0.5 h-7 w-7 shrink-0 rounded-md"
                           />
 
-                          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                              <p
-                                className={cn(
-                                  'line-clamp-2 wrap-break-word text-sm font-semibold capitalize leading-tight transition-all duration-200',
-                                  item.checked && 'line-through text-muted-foreground'
-                                )}
-                                title={item.normalized_name}
-                              >
-                                {item.normalized_name}
-                              </p>
-                              <div className="flex shrink-0 items-center gap-1">
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-9 w-9 sm:h-8 sm:w-8"
-                                  onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
-                                  disabled={item.quantity <= MIN_QUANTITY}
-                                  aria-label="Diminuir quantidade"
-                                >
-                                  <Minus className="h-3.5 w-3.5" />
-                                </Button>
-                                <span className="min-w-8 text-center text-sm font-medium">
-                                  {item.quantity}
-                                </span>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-9 w-9 sm:h-8 sm:w-8"
-                                  onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                                  aria-label="Aumentar quantidade"
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
+                          <div className="col-start-2 row-start-1 min-w-0">
+                            <p
+                              className={cn(
+                                'line-clamp-2 wrap-break-word text-sm font-semibold capitalize leading-tight transition-all duration-200',
+                                item.checked && 'line-through text-muted-foreground'
+                              )}
+                              title={item.normalized_name}
+                            >
+                              {item.normalized_name}
+                            </p>
+                          </div>
 
+                          <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-0.5">
+                            <Button
+                              variant="outline"
+                              size="icon-sm"
+                              className="h-8 w-8"
+                              onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                              disabled={item.quantity <= MIN_QUANTITY}
+                              aria-label="Diminuir quantidade"
+                            >
+                              <Minus className="h-3.5 w-3.5" />
+                            </Button>
+                            <span className="min-w-6 text-center font-mono text-sm font-semibold tabular-nums">
+                              {item.quantity}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="icon-sm"
+                              className="h-8 w-8"
+                              onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                              aria-label="Aumentar quantidade"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+
+                          <div className="col-start-2 row-start-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                             <div className="flex flex-wrap items-center gap-2">
                               {item.quantity > 1 && (
                                 <span className="text-xs text-muted-foreground">
@@ -560,9 +616,8 @@ export default function ListaPage() {
                                 </Popover>
                               )}
                             </div>
-
                             {formatComparableReference(item) && (
-                              <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                                 <span className="min-w-0 text-xs font-semibold text-foreground">
                                   {getShoppingListItemComparableContext(item)}
                                 </span>
@@ -587,15 +642,15 @@ export default function ListaPage() {
                             )}
                           </div>
 
-                          <div className="col-start-2 flex items-center justify-between gap-3 sm:col-start-auto sm:flex-col sm:items-end sm:gap-1.5">
+                          <div className="col-start-3 row-start-2 flex items-center justify-end gap-2">
                             <span className={cn(
-                              'font-mono text-base font-bold transition-all duration-200',
+                              'font-mono text-sm font-bold transition-all duration-200 sm:text-base',
                               item.checked && 'text-muted-foreground'
                             )}>
                               {formatCurrency(getShoppingListItemTotal(item))}
                             </span>
                             <button
-                              className="flex h-9 w-9 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-destructive sm:h-7 sm:w-7"
+                              className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-destructive"
                               onClick={() => handleDeleteItem(item.id)}
                               aria-label="Remover item"
                             >
@@ -607,6 +662,50 @@ export default function ListaPage() {
                     ))}
                   </div>
                 </div>
+                  ))}
+                  {section.customItems.length > 0 && (
+                    <div>
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+                          Itens avulsos
+                        </span>
+                        <div className="h-px flex-1 bg-border/50" />
+                      </div>
+                      <div className="space-y-2">
+                        {section.customItems.map((item) => (
+                          <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-50')}>
+                            <CardContent className="flex items-center gap-3 p-3">
+                              <Checkbox
+                                checked={item.checked}
+                                onCheckedChange={(checked) =>
+                                  handleToggleCustomItem(item.id, checked as boolean)
+                                }
+                                className="h-7 w-7 shrink-0 rounded-md"
+                              />
+                              <p
+                                className={cn(
+                                  'flex-1 text-sm font-medium',
+                                  item.checked && 'line-through'
+                                )}
+                              >
+                                {item.name}
+                              </p>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                onClick={() => handleDeleteCustomItem(item.id)}
+                                aria-label="Remover item avulso"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </section>
               ))}
             </div>
           ) : (
@@ -624,81 +723,9 @@ export default function ListaPage() {
               </CardContent>
             </Card>
           )}
-
-      {/* Custom items */}
-      {customItems.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-sm font-medium text-muted-foreground">Itens Avulsos</h3>
-          <div className="space-y-2">
-            {customItems.map((item) => (
-              <Card key={item.id} className={cn('bg-card', item.checked && 'opacity-50')}>
-                <CardContent className="flex items-center gap-3 p-3">
-                  <Checkbox
-                    checked={item.checked}
-                    onCheckedChange={(checked) =>
-                      handleToggleCustomItem(item.id, checked as boolean)
-                    }
-                    className="h-7 w-7 shrink-0 rounded-md"
-                  />
-                  <p
-                    className={cn(
-                      'flex-1 text-sm font-medium',
-                      item.checked && 'line-through'
-                    )}
-                  >
-                    {item.name}
-                  </p>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleDeleteCustomItem(item.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
         </div>
 
         <aside className="space-y-3 md:sticky md:top-6">
-          {/* Search catalog */}
-          <div className="relative">
-            <Input
-              placeholder="Buscar produto no catálogo..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-11 bg-secondary/50"
-            />
-            {searchQuery && (
-              <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl border border-border bg-card shadow-lg">
-                <div className="max-h-56 overflow-y-auto overscroll-contain p-1">
-                  {productsData?.products?.slice(0, 5).map((product) => (
-                    <button
-                      key={product.id}
-                      className="flex min-h-12 w-full items-center justify-between rounded-lg p-2.5 text-left transition-colors hover:bg-secondary/50"
-                      onClick={() => handleAddItem(product.id)}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium capitalize">{product.normalized_name}</p>
-                        <p className="text-xs text-muted-foreground">{product.category}</p>
-                      </div>
-                      <Plus className="ml-2 h-4 w-4 shrink-0 text-primary" />
-                    </button>
-                  ))}
-                  {(!productsData?.products || productsData.products.length === 0) && (
-                    <p className="px-2 py-3 text-center text-sm text-muted-foreground">
-                      Nenhum produto encontrado no catálogo
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Custom item input */}
           {showCustomInput ? (
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] md:grid-cols-1">
@@ -812,4 +839,13 @@ export default function ListaPage() {
       ) : null}
     </div>
   )
+}
+
+function groupItemsByCategory(items: ShoppingListDetailItem[]) {
+  return items.reduce((groups, item) => {
+    const category = item.category || 'Outros'
+    if (!groups[category]) groups[category] = []
+    groups[category].push(item)
+    return groups
+  }, {} as Record<string, ShoppingListDetailItem[]>)
 }

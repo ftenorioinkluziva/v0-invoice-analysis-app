@@ -47,8 +47,8 @@ export default function SignInPage() {
     <Card className="border-border/80 bg-card/95 shadow-none">
       <CardHeader className="space-y-3 pb-4">
         <div>
-          <p className="text-sm font-medium text-primary">NoteWise</p>
-          <CardTitle className="mt-1 text-2xl">Entrar</CardTitle>
+          <p className="type-title text-primary">NoteWise</p>
+          <CardTitle className="type-display mt-1">Entrar</CardTitle>
         </div>
         <CardDescription>
           Acesse suas notas, listas e alertas de preço em BRL.

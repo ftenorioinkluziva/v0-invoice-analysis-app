@@ -264,4 +264,13 @@ describe('Comparable catalog schemas', () => {
 
     expect(result.success).toBe(false)
   })
+
+  it('should represent the full history period as a null cutoff', () => {
+    const result = parseHistoryPeriodDaysParam('all')
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBeNull()
+    }
+  })
 })

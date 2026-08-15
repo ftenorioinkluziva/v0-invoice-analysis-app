@@ -66,7 +66,9 @@ export const ComparableBaseUnitSchema = z.enum(['kg', 'L', 'un'])
 export const ProductGroupSuggestionStatusSchema = z.enum(['pending', 'accepted', 'rejected', 'superseded'])
 export const HISTORY_PERIOD_DAYS = [30, 90, 180] as const
 export const DEFAULT_HISTORY_PERIOD_DAYS = 90
-export const HistoryPeriodDaysParamSchema = z.enum(['30', '90', '180']).transform(value => Number(value) as typeof HISTORY_PERIOD_DAYS[number])
+export const HistoryPeriodDaysParamSchema = z.enum(['30', '90', '180', 'all']).transform(value =>
+  value === 'all' ? null : Number(value) as typeof HISTORY_PERIOD_DAYS[number]
+)
 
 const DisplayNameSchema = z.string().trim().min(1).max(255)
 const BrandSchema = z.string().trim().min(1).max(255).nullable()

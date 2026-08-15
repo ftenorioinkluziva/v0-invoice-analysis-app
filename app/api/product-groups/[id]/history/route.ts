@@ -77,7 +77,10 @@ export async function GET(
             AND p.user_id = $2
             AND ii.comparable_unit_price IS NOT NULL
             AND ii.comparable_base_unit = pg.base_unit
-            AND i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+            AND (
+              $3::int IS NULL
+              OR i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+            )
         `,
         [groupId, userId, periodDays]
       )
@@ -98,7 +101,10 @@ export async function GET(
             AND p.user_id = $2
             AND ii.comparable_unit_price IS NOT NULL
             AND ii.comparable_base_unit = pg.base_unit
-            AND i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+            AND (
+              $3::int IS NULL
+              OR i.purchase_date >= CURRENT_DATE - ($3::int * INTERVAL '1 day')
+            )
           ORDER BY i.purchase_date DESC, ii.id DESC
           LIMIT 5
         `,

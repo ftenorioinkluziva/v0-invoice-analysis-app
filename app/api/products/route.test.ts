@@ -43,7 +43,8 @@ describe('GET /api/products', () => {
   it('returns filtered products for the requested period', async () => {
     const client = createClient(async (queryText, params) => {
       if (queryText.includes('HAVING COUNT(ii.id) FILTER')) {
-        expect(params).toEqual(['user-1', 'leite', '%leite%', 30, ''])
+        expect(params).toEqual(['user-1', 'leite', ['%leite%'], 30, ''])
+        expect(queryText).toContain('p.normalized_name ILIKE ALL($3::text[])')
         return {
           rows: [
             {
@@ -90,7 +91,7 @@ describe('GET /api/products', () => {
   it('preserves broad product search when period_days is omitted', async () => {
     const client = createClient(async (queryText, params) => {
       if (queryText.includes('HAVING COUNT(ii.id) FILTER')) {
-        expect(params).toEqual(['user-1', 'arroz', '%arroz%', null, ''])
+        expect(params).toEqual(['user-1', 'arroz', ['%arroz%'], null, ''])
         expect(queryText).toContain('WHERE $4::int IS NULL OR i.purchase_date >= CURRENT_DATE - ($4::int * INTERVAL \'1 day\')')
 
         return {
@@ -133,6 +134,40 @@ describe('GET /api/products', () => {
         },
       ],
       categories: ['Mercearia'],
+    })
+  })
+
+  it('requires every search word without requiring an exact phrase', async () => {
+    const client = createClient(async (queryText, params) => {
+      if (queryText.includes('HAVING COUNT(ii.id) FILTER')) {
+        expect(params).toEqual(['user-1', 'arroz branco', ['%arroz%', '%branco%'], null, ''])
+        expect(queryText).toContain('p.normalized_name ILIKE ALL($3::text[])')
+        return {
+          rows: [{
+            products: [{
+              id: 31,
+              normalized_name: 'arroz tio joao branco 2kg',
+              category: 'Grãos',
+              avg_price: '13.08',
+              purchase_count: '7',
+              last_purchase: '2026-08-01',
+            }],
+            categories: ['Grãos'],
+          }],
+        }
+      }
+
+      throw new Error(`Unexpected query: ${queryText}`)
+    })
+
+    connect.mockResolvedValue(client)
+
+    const { GET } = await import('./route')
+    const response = await GET(new Request('http://localhost/api/products?search=arroz%20branco'))
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      products: [{ normalized_name: 'arroz tio joao branco 2kg' }],
     })
   })
 })

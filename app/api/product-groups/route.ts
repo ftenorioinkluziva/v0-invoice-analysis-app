@@ -1,6 +1,7 @@
 import { getSessionUserId } from '@/lib/auth-session'
 import { isMissingRelationError } from '@/lib/db-errors'
 import { withUserTransaction } from '@/lib/session-sql'
+import { buildSearchPatterns } from '@/lib/search'
 import {
   CreateProductGroupSchema,
   ProductGroupResponseSchema,
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const view = searchParams.get('view')
   const search = searchParams.get('search')?.trim() ?? ''
+  const searchPatterns = buildSearchPatterns(search)
   const baseUnit = searchParams.get('base_unit')?.trim() ?? ''
 
   if (view !== 'comparable' && view !== 'all') {
@@ -58,27 +60,36 @@ export async function GET(request: Request) {
                 AND ii.comparable_base_unit = pg.base_unit
               LEFT JOIN invoices i ON i.id = ii.invoice_id
                 AND i.user_id = pg.user_id
-                AND i.purchase_date >= CURRENT_DATE - ($4::int * INTERVAL '1 day')
+                AND (
+                  $4::int IS NULL
+                  OR i.purchase_date >= CURRENT_DATE - ($4::int * INTERVAL '1 day')
+                )
               WHERE pg.user_id = $1
                 AND (
                   $2 = ''
-                  OR pg.display_name ILIKE $3
-                  OR EXISTS (
+                  OR NOT EXISTS (
                     SELECT 1
-                    FROM products search_products
-                    WHERE search_products.comparable_group_id = pg.id
-                      AND search_products.user_id = pg.user_id
-                      AND (
-                        search_products.normalized_name ILIKE $3
-                        OR COALESCE(search_products.brand, '') ILIKE $3
+                    FROM unnest($3::text[]) AS search_term(pattern)
+                    WHERE NOT (
+                      pg.display_name ILIKE search_term.pattern
+                      OR EXISTS (
+                        SELECT 1
+                        FROM products search_products
+                        WHERE search_products.comparable_group_id = pg.id
+                          AND search_products.user_id = pg.user_id
+                          AND (
+                            search_products.normalized_name ILIKE search_term.pattern
+                            OR COALESCE(search_products.brand, '') ILIKE search_term.pattern
+                          )
                       )
+                    )
                   )
                 )
               GROUP BY pg.id, pg.display_name, pg.base_unit
               ORDER BY pg.display_name ASC
               LIMIT 50
             `,
-            [userId, search, `%${search}%`, periodDaysResult.data]
+            [userId, search, searchPatterns, periodDaysResult.data]
           )
         : await client.query(
             `
@@ -92,12 +103,12 @@ export async function GET(request: Request) {
                 0::numeric AS max_unit_price
               FROM product_groups pg
               WHERE pg.user_id = $1
-                AND ($2 = '' OR pg.display_name ILIKE $3)
+                AND ($2 = '' OR pg.display_name ILIKE ALL($3::text[]))
                 AND ($4 = '' OR pg.base_unit = $4)
               ORDER BY pg.display_name ASC
               LIMIT 50
             `,
-            [userId, search, `%${search}%`, baseUnit]
+            [userId, search, searchPatterns, baseUnit]
           )
 
       return Response.json({

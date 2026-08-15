@@ -125,7 +125,7 @@ export default function HistoricoPage() {
   }, [searchQuery])
 
   const categoryParam = selectedCategory === 'all' ? '' : selectedCategory
-  const periodParam = periodDays === 'all' ? '' : `&period_days=${periodDays}`
+  const periodParam = `&period_days=${periodDays}`
   const productsUrl = `/api/products?search=${encodeURIComponent(debouncedSearchQuery)}&category=${encodeURIComponent(categoryParam)}${periodParam}`
   const comparableGroupsUrl = `/api/product-groups?view=comparable&search=${encodeURIComponent(debouncedSearchQuery)}${periodParam}`
 
@@ -149,7 +149,7 @@ export default function HistoricoPage() {
     error: productHistoryError,
     mutate: mutateProductHistory,
   } = useSWR<ProductPriceHistory>(
-    selectedProductId ? `/api/products/${selectedProductId}${periodDays === 'all' ? '' : `?period_days=${periodDays}`}` : null,
+    selectedProductId ? `/api/products/${selectedProductId}?period_days=${periodDays}` : null,
     fetchJsonWithAuthRedirect
   )
 
@@ -158,7 +158,7 @@ export default function HistoricoPage() {
     error: comparableGroupHistoryError,
     mutate: mutateComparableGroupHistory,
   } = useSWR<ComparableGroupHistory>(
-    selectedGroupId ? `/api/product-groups/${selectedGroupId}/history${periodDays === 'all' ? '' : `?period_days=${periodDays}`}` : null,
+    selectedGroupId ? `/api/product-groups/${selectedGroupId}/history?period_days=${periodDays}` : null,
     fetchJsonWithAuthRedirect
   )
 

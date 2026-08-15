@@ -74,7 +74,7 @@ describe('GET /api/product-group-suggestions', () => {
               id: 21,
               source_product_id: 7,
               target_group_id: 3,
-              confidence: 0.767,
+              confidence: '0.767',
               reasons: ['Unidade base compativel', 'Categoria igual'],
               status: 'pending',
             },

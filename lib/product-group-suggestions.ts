@@ -51,8 +51,16 @@ type SuggestionRow = {
   status: SuggestionStatus
 }
 
+type SuggestionDatabaseRow = Omit<SuggestionRow, 'confidence'> & {
+  confidence: number | string
+}
+
 type PersistedSuggestionRow = SuggestionRow & {
   signals_snapshot: SuggestionSignalsSnapshot
+}
+
+type PersistedSuggestionDatabaseRow = Omit<PersistedSuggestionRow, 'confidence'> & {
+  confidence: number | string
 }
 
 type ProductRow = {
@@ -169,7 +177,7 @@ export async function recomputeProductGroupSuggestions(client: PoolClient, userI
 }
 
 export async function listPendingProductGroupSuggestions(client: PoolClient, userId: string) {
-  const result = await client.query<SuggestionRow>(
+  const result = await client.query<SuggestionDatabaseRow>(
     `
       SELECT id, source_product_id, target_group_id, confidence, reasons, status
       FROM product_group_suggestions
@@ -180,7 +188,7 @@ export async function listPendingProductGroupSuggestions(client: PoolClient, use
     [userId]
   )
 
-  return result.rows.map(row => ProductGroupSuggestionResponseSchema.parse(row))
+  return result.rows.map(row => ProductGroupSuggestionResponseSchema.parse(normalizeSuggestionConfidence(row)))
 }
 
 export async function acceptProductGroupSuggestion(client: PoolClient, suggestionId: number, userId: string) {
@@ -217,7 +225,7 @@ export async function acceptProductGroupSuggestion(client: PoolClient, suggestio
     [suggestion.source_product_id, suggestion.target_group_id, userId, userId]
   )
 
-  const result = await client.query<SuggestionRow>(
+  const result = await client.query<SuggestionDatabaseRow>(
     `
       UPDATE product_group_suggestions
       SET status = 'accepted',
@@ -231,7 +239,10 @@ export async function acceptProductGroupSuggestion(client: PoolClient, suggestio
     [suggestionId, userId, userId]
   )
 
-  return { kind: 'ok' as const, suggestion: ProductGroupSuggestionResponseSchema.parse(result.rows[0]) }
+  return {
+    kind: 'ok' as const,
+    suggestion: ProductGroupSuggestionResponseSchema.parse(normalizeSuggestionConfidence(result.rows[0])),
+  }
 }
 
 export async function rejectProductGroupSuggestion(client: PoolClient, suggestionId: number, userId: string) {
@@ -245,7 +256,7 @@ export async function rejectProductGroupSuggestion(client: PoolClient, suggestio
     return { kind: 'invalid' as const, message: invalidReason }
   }
 
-  const result = await client.query<SuggestionRow>(
+  const result = await client.query<SuggestionDatabaseRow>(
     `
       UPDATE product_group_suggestions
       SET status = 'rejected',
@@ -259,7 +270,10 @@ export async function rejectProductGroupSuggestion(client: PoolClient, suggestio
     [suggestionId, userId, userId]
   )
 
-  return { kind: 'ok' as const, suggestion: ProductGroupSuggestionResponseSchema.parse(result.rows[0]) }
+  return {
+    kind: 'ok' as const,
+    suggestion: ProductGroupSuggestionResponseSchema.parse(normalizeSuggestionConfidence(result.rows[0])),
+  }
 }
 
 export function scoreProductGroupSuggestion(source: Pick<SourceProductRow, 'normalized_name' | 'category' | 'brand' | 'comparable_base_unit'>, target: Pick<GroupMemberRow, 'normalized_name' | 'category' | 'brand' | 'base_unit'>) {
@@ -412,7 +426,7 @@ async function getGroupMembers(client: PoolClient, userId: string) {
 }
 
 async function getLatestRejectedSuggestions(client: PoolClient, userId: string) {
-  const result = await client.query<RejectedSuggestionRow>(
+  const result = await client.query<Omit<RejectedSuggestionRow, 'confidence'> & { confidence: number | string }>(
     `
       SELECT DISTINCT ON (source_product_id, target_group_id)
         source_product_id,
@@ -427,11 +441,11 @@ async function getLatestRejectedSuggestions(client: PoolClient, userId: string) 
     [userId]
   )
 
-  return result.rows
+  return result.rows.map(row => normalizeSuggestionConfidence(row))
 }
 
 async function getPendingSuggestion(client: PoolClient, suggestionId: number, userId: string) {
-  const result = await client.query<PersistedSuggestionRow>(
+  const result = await client.query<PersistedSuggestionDatabaseRow>(
     `
       SELECT id, source_product_id, target_group_id, confidence, reasons, status, signals_snapshot
       FROM product_group_suggestions
@@ -443,7 +457,8 @@ async function getPendingSuggestion(client: PoolClient, suggestionId: number, us
     [suggestionId, userId]
   )
 
-  return result.rows[0] ?? null
+  const row = result.rows[0]
+  return row ? normalizeSuggestionConfidence(row) : null
 }
 
 async function getSuggestionInvalidReason(client: PoolClient, suggestion: PersistedSuggestionRow, userId: string) {
@@ -541,4 +556,14 @@ function buildPairKey(sourceProductId: number, targetGroupId: number) {
 
 function roundConfidence(value: number) {
   return Math.round(value * 1000) / 1000
+}
+
+function normalizeSuggestionConfidence<T extends { confidence: number | string }>(row: T) {
+  const confidence = Number(row.confidence)
+
+  if (!Number.isFinite(confidence)) {
+    throw new Error('Invalid product group suggestion confidence')
+  }
+
+  return { ...row, confidence }
 }

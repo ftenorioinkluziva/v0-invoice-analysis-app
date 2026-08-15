@@ -18,13 +18,13 @@ type SpendingChartProps = {
 }
 
 const chartColors = {
-  axis: 'oklch(0.72 0.015 165)',
-  grid: 'oklch(0.32 0.02 165)',
-  line: 'oklch(0.78 0.16 165)',
+  axis: 'oklch(0.72 0.015 245)',
+  grid: 'oklch(0.32 0.02 245)',
+  line: 'oklch(0.72 0.14 245)',
   lineSoft: 'oklch(0.7 0.17 145)',
-  tooltipBg: 'oklch(0.12 0.01 165)',
-  tooltipBorder: 'oklch(0.34 0.04 165)',
-  tooltipText: 'oklch(0.98 0.005 165)',
+  tooltipBg: 'oklch(0.20 0.01 250)',
+  tooltipBorder: 'oklch(0.34 0.04 245)',
+  tooltipText: 'oklch(0.97 0.005 250)',
 }
 
 export function SpendingChart({ data, isLoading }: SpendingChartProps) {

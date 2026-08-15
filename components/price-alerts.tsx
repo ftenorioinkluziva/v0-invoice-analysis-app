@@ -78,7 +78,7 @@ export function PriceAlerts({ priceIncreases, isLoading }: PriceAlertsProps) {
                   {formatCurrency(item.previous_price)} → {formatCurrency(item.current_price)}
                 </p>
               </div>
-              <span className="flex items-center gap-1 rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-medium text-destructive">
+              <span className="type-label flex items-center gap-1 rounded-full bg-destructive/15 px-2 py-0.5 text-destructive">
                 <TrendingUp className="h-3 w-3" />
                 +{item.price_variation.toFixed(0)}%
               </span>

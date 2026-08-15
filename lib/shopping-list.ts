@@ -55,3 +55,18 @@ export function getShoppingListItemComparableContext(
 
   return item.comparable_reference_label
 }
+
+export function partitionShoppingListItems<T extends { checked: boolean }>(items: T[]) {
+  const pending: T[] = []
+  const checked: T[] = []
+
+  for (const item of items) {
+    if (item.checked) {
+      checked.push(item)
+    } else {
+      pending.push(item)
+    }
+  }
+
+  return { pending, checked }
+}

@@ -92,7 +92,7 @@ export function RecentInvoices({ invoices, isLoading }: RecentInvoicesProps) {
                   {formatDate(invoice.purchase_date)} • {invoice.item_count} itens
                 </p>
               </div>
-              <span className="font-mono text-sm font-semibold text-primary">
+              <span className="type-data text-primary">
                 {formatCurrency(invoice.total_amount)}
               </span>
             </div>

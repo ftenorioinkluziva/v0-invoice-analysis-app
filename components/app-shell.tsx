@@ -12,7 +12,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <>
       <main
         className={cn(
-          'mx-auto min-h-screen w-full max-w-lg md:max-w-5xl md:px-6',
+          'mx-auto min-h-screen w-full max-w-[760px] md:px-6',
           !isAuthRoute && 'pb-20',
         )}
       >

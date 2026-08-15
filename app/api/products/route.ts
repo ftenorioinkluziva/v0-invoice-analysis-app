@@ -1,6 +1,7 @@
 import { getSessionUserId } from '@/lib/auth-session'
 import { parseHistoryPeriodDaysParam } from '@/lib/validations'
 import { withUserTransaction } from '@/lib/session-sql'
+import { buildSearchPatterns } from '@/lib/search'
 import {
   operationErrorResponse,
   toOperationError,
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     }
 
     const periodDays = periodDaysResult.data
-    const likeSearch = `%${search}%`
+    const searchPatterns = buildSearchPatterns(search)
 
     // 1 roundtrip: produtos + categorias via CTE
     const result = await withUserTransaction(userId, (client) => client.query(
@@ -49,7 +50,7 @@ export async function GET(request: Request) {
             LEFT JOIN invoice_items ii ON ii.product_id = p.id AND ii.user_id = p.user_id
             LEFT JOIN invoices i ON i.id = ii.invoice_id AND i.user_id = p.user_id
             WHERE p.user_id = $1
-              AND ($2 = '' OR p.normalized_name ILIKE $3)
+              AND ($2 = '' OR p.normalized_name ILIKE ALL($3::text[]))
               AND ($5 = '' OR p.category = $5)
             GROUP BY p.id, p.normalized_name, p.category
             HAVING COUNT(ii.id) FILTER (
@@ -68,7 +69,7 @@ export async function GET(request: Request) {
             COALESCE((SELECT json_agg(products_result ORDER BY purchase_count DESC, normalized_name ASC) FROM products_result), '[]') AS products,
             COALESCE((SELECT json_agg(category ORDER BY category ASC) FROM categories_result), '[]') AS categories
         `,
-        [userId, search, likeSearch, periodDays, category]
+        [userId, search, searchPatterns, periodDays, category]
       ))
 
       const row = result.rows[0]
