@@ -1,0 +1,80 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Lint, Typecheck e Testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+
+      - name: Testes unitários
+        run: pnpm test
+
+  deploy:
+    name: Deploy produção (Hetzner 1)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar chave SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Sincronizar código com o servidor
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new" \
+            ./ root@135.181.47.220:/root/invoice-analysis/src/
+
+      - name: Build ARM64 nativo e subir container
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new root@135.181.47.220 '
+            set -e
+            cd /root/invoice-analysis
+            echo "strictDepBuilds=false" > src/.npmrc
+            docker build --build-arg NEXT_PUBLIC_APP_URL=https://notas.blackboxinovacao.com.br -t invoice-analysis-app:prod src/
+            docker compose --env-file .env.docker -f docker-compose.prod.yml up -d app
+            sleep 8
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3005/)
+            echo "HTTP local: $CODE"
+            if [ "$CODE" != "307" ] && [ "$CODE" != "200" ]; then
+              echo "::error::App não respondeu após o deploy"
+              docker logs --tail 50 invoice-analysis-app
+              exit 1
+            fi
+            docker image prune -f
+          '
+
+      - name: Verificar HTTPS público
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" -L https://notas.blackboxinovacao.com.br/sign-in)
+          echo "HTTPS público: $CODE"
+          [ "$CODE" = "200" ] || (echo "::warning::HTTPS público retornou $CODE")

@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: invoice-analysis-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-invoice_analysis}
+      POSTGRES_USER: ${POSTGRES_USER:-invoice_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD obrigatoria}
+      POSTGRES_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD:?POSTGRES_RUNTIME_PASSWORD obrigatoria}
+    volumes:
+      - invoice-analysis-postgres:/var/lib/postgresql/data
+      - ./scripts/010-create-runtime-role.sh:/docker-entrypoint-initdb.d/010-create-runtime-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-invoice_app} -d ${POSTGRES_DB:-invoice_analysis}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    image: invoice-analysis-app:prod
+    container_name: invoice-analysis-app
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    environment:
+      DATABASE_URL: postgresql://invoice_runtime:${POSTGRES_RUNTIME_PASSWORD}@db:5432/${POSTGRES_DB:-invoice_analysis}
+      PORT: 3000
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - default
+      - npm
+    ports:
+      - "3005:3000"
+
+volumes:
+  invoice-analysis-postgres:
+
+networks:
+  npm:
+    external: true
+    name: npm_default
