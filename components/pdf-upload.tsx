@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Upload, FileText, Check, Loader2, AlertCircle } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -14,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { fetchWithAuthRedirect } from '@/lib/client-fetch'
+import { getInvoiceSaveErrorMessage } from '@/lib/invoice-upload-utils'
 import { ExtractedInvoice } from '@/lib/types'
 
 type UploadStatus = 'idle' | 'uploading' | 'extracting' | 'preview' | 'saving' | 'success' | 'error'
@@ -59,6 +61,7 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const resetInput = () => {
     if (fileInputRef.current) {
@@ -193,25 +196,25 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
 
       if (!response.ok) {
         const body = await response.json().catch(() => null)
-        if (response.status === 409) {
-          throw new Error('Esta nota fiscal já foi importada anteriormente.')
-        }
-        throw new Error(body?.error || 'Não foi possível salvar a nota. Tente novamente.')
+        throw new Error(getInvoiceSaveErrorMessage(response.status, body?.error))
       }
 
       setStatus('success')
       setShowPreview(false)
-      
-      setTimeout(() => {
+      toast.success('Nota fiscal salva com sucesso', { duration: 6000 })
+      onSuccess?.()
+
+      successTimeoutRef.current = setTimeout(() => {
         setStatus('idle')
         setSelectedFile(null)
         setExtractedData(null)
         resetInput()
-        onSuccess?.()
-      }, 2000)
+        successTimeoutRef.current = null
+      }, 5000)
     } catch (err) {
       setStatus('error')
       setError(err instanceof Error ? err.message : 'Erro ao salvar nota')
+      setShowPreview(true)
     }
   }
 
@@ -232,6 +235,9 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
       abortControllerRef.current?.abort()
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current)
+      }
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current)
       }
     }
   }, [])
@@ -430,6 +436,16 @@ export function PdfUpload({ onSuccess }: { onSuccess?: () => void }) {
                 </div>
               </div>
             </ScrollArea>
+          )}
+
+          {status === 'error' && error && (
+            <div
+              className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm"
+              role="alert"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+              <p className="[overflow-wrap:anywhere] text-destructive">{error}</p>
+            </div>
           )}
 
           <DialogFooter className="gap-2">
