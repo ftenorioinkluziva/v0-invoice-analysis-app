@@ -2,6 +2,8 @@
 
 import { usePathname } from 'next/navigation'
 import { MobileNav } from '@/components/mobile-nav'
+import { StaleServerActionRecovery } from '@/components/stale-server-action-recovery'
+import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -10,6 +12,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
+      <StaleServerActionRecovery />
       <main
         className={cn(
           'mx-auto min-h-screen w-full max-w-[760px] md:px-6',
@@ -19,6 +22,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       {!isAuthRoute && <MobileNav />}
+      <Toaster position="top-center" />
     </>
   )
 }
